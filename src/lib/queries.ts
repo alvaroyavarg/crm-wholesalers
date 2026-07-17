@@ -1,8 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { fiscalActual } from "./fiscal";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
+  Boletin,
   CeldaPlanRow,
   Cliente,
+  Contacto,
   MixCategoriaRow,
   Nota,
   Perfil,
@@ -27,8 +30,15 @@ export async function fichaCliente(id: string) {
   const supabase = await createClient();
   const { fy, periodo } = fiscalActual();
 
-  const [clienteRes, perfilRes, notasRes, mixRes, serieRes, resumenRes] =
-    await Promise.all([
+  const [
+    clienteRes,
+    perfilRes,
+    notasRes,
+    mixRes,
+    serieRes,
+    resumenRes,
+    contactosRes,
+  ] = await Promise.all([
       supabase.from("clientes").select("*").eq("id", id).single(),
       supabase.from("perfiles").select("*").eq("cliente_id", id).maybeSingle(),
       supabase
@@ -40,6 +50,11 @@ export async function fichaCliente(id: string) {
       supabase.rpc("mix_categorias", { p_cliente: id }),
       supabase.rpc("serie_cliente", { p_cliente: id, p_fy: fy }),
       supabase.rpc("resumen_cartera", { p_fy: fy, p_periodo: periodo }),
+      supabase
+        .from("contactos")
+        .select("*")
+        .eq("cliente_id", id)
+        .order("creado_at", { ascending: true }),
     ]);
 
   if (clienteRes.error)
@@ -58,7 +73,36 @@ export async function fichaCliente(id: string) {
     mix: (mixRes.data ?? []) as MixCategoriaRow[],
     serie: (serieRes.data ?? []) as SeriePeriodoRow[],
     resumen: resumen ?? null,
+    contactos: (contactosRes.data ?? []) as Contacto[],
   };
+}
+
+// Boletines con URL firmada (bucket privado) para ver el archivo.
+export async function listarBoletines() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("boletines")
+    .select(
+      "id, titulo, origen, fecha_publicacion, vigente_desde, vigente_hasta, resumen_accionable, archivo_url",
+    )
+    .order("vigente_desde", { ascending: false });
+  if (error) throw new Error(`boletines: ${error.message}`);
+
+  const admin = createAdminClient();
+  const boletines = await Promise.all(
+    ((data ?? []) as Boletin[]).map(async (b) => {
+      let urlFirmada: string | null = null;
+      if (b.archivo_url) {
+        const { data: firmada } = await admin.storage
+          .from("boletines")
+          .createSignedUrl(b.archivo_url, 3600);
+        urlFirmada = firmada?.signedUrl ?? null;
+      }
+      return { ...b, urlFirmada };
+    }),
+  );
+
+  return boletines;
 }
 
 export async function planMatriz() {

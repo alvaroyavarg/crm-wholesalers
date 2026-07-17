@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const enlaces = [
   { href: "/", etiqueta: "Dashboard", icono: "📊" },
   { href: "/plan", etiqueta: "Plan de venta", icono: "🎯" },
+  { href: "/boletines", etiqueta: "Boletines", icono: "📰" },
 ];
 
 const proximamente = [

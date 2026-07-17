@@ -29,6 +29,29 @@ export interface ResumenCliente {
   fy_ly_eus: number;
   plan_fy_eus: number;
   ultima_visita: string | null;
+  mes_ly_eus: number;
+}
+
+export interface Contacto {
+  id: string;
+  cliente_id: string;
+  nombre: string;
+  cargo: string | null;
+  correo: string | null;
+  telefono: string | null;
+}
+
+export type OrigenBoletin = "KOA" | "KOE";
+
+export interface Boletin {
+  id: string;
+  titulo: string;
+  origen: OrigenBoletin;
+  fecha_publicacion: string;
+  vigente_desde: string;
+  vigente_hasta: string;
+  resumen_accionable: string | null;
+  archivo_url: string | null; // path dentro del bucket "boletines"
 }
 
 // Señales de "Compra Inteligente"

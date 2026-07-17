@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { BarraAvance } from "@/components/ui/BarraAvance";
+import { GloboMes } from "@/components/dashboard/GloboMes";
 import { etiquetaFY, etiquetaPeriodo, mesDePeriodo } from "@/lib/fiscal";
 import {
   avancePct,
@@ -45,6 +46,11 @@ export default async function Dashboard({
     0,
   );
   const totalYtdLy = clientes.reduce((acc, c) => acc + Number(c.ytd_ly_eus), 0);
+  const totalPlanMes = clientes.reduce(
+    (acc, c) => acc + Number(c.plan_mes_eus),
+    0,
+  );
+  const totalMesLy = clientes.reduce((acc, c) => acc + Number(c.mes_ly_eus), 0);
 
   const conSenales = clientes.filter((c) => senalesCliente(c).length > 0);
 
@@ -66,6 +72,14 @@ export default async function Dashboard({
           Cartera de cuentas clave · {cicloLabel}
         </p>
       </header>
+
+      <GloboMes
+        fy={fy}
+        periodo={periodo}
+        mesEus={totalMes}
+        planMesEus={totalPlanMes}
+        mesLyEus={totalMesLy}
+      />
 
       <section className="mb-6 grid grid-cols-3 gap-4">
         <KpiCard

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
+import { ContactosClaves } from "@/components/cliente/ContactosClaves";
 import { MixCategorias } from "@/components/cliente/MixCategorias";
 import { etiquetaFY, etiquetaPeriodo, mesDePeriodo } from "@/lib/fiscal";
 import {
@@ -39,7 +40,8 @@ export default async function FichaClientePage({
     notFound();
   }
 
-  const { fy, periodo, cliente, perfil, notas, mix, serie, resumen } = data;
+  const { fy, periodo, cliente, perfil, notas, mix, serie, resumen, contactos } =
+    data;
   const vsLy = resumen
     ? pctVsLY(Number(resumen.ytd_eus), Number(resumen.ytd_ly_eus))
     : null;
@@ -186,8 +188,45 @@ export default async function FichaClientePage({
                     </td>
                   ))}
                 </tr>
+                <tr className="border-t border-gray-100">
+                  <td className="py-2 pr-2 font-medium text-gray-400">Δ %</td>
+                  {serie.map((s) => {
+                    if (s.periodo > periodo) {
+                      return (
+                        <td
+                          key={s.periodo}
+                          className="px-1.5 py-2 text-right text-gray-300"
+                        >
+                          ·
+                        </td>
+                      );
+                    }
+                    const delta = pctVsLY(
+                      Number(s.eus_actual),
+                      Number(s.eus_ly),
+                    );
+                    return (
+                      <td
+                        key={s.periodo}
+                        className={`px-1.5 py-2 text-right font-semibold ${
+                          delta == null
+                            ? "text-gray-300"
+                            : delta >= 0
+                              ? "text-verde"
+                              : "text-rojo"
+                        }`}
+                      >
+                        {formatPct(delta, 0)}
+                      </td>
+                    );
+                  })}
+                </tr>
               </tbody>
             </table>
+            <p className="mt-2 text-[11px] text-gray-400">
+              Δ %: crecimiento (verde) o caída (rojo) de {etiquetaFY(fy)} vs el
+              mismo mes de {etiquetaFY(fy - 1)}
+            </p>
           </Card>
 
           <Card>
@@ -201,8 +240,15 @@ export default async function FichaClientePage({
           </Card>
         </div>
 
-        {/* Columna 3: memoria */}
+        {/* Columna 3: contactos y memoria */}
         <div className="space-y-6">
+          <Card>
+            <h2 className="mb-4 font-display text-base font-semibold text-gray-900">
+              Contactos claves
+            </h2>
+            <ContactosClaves clienteId={cliente.id} contactos={contactos} />
+          </Card>
+
           {perfil?.resumen && (
             <Card>
               <h2 className="mb-2 font-display text-base font-semibold text-gray-900">
