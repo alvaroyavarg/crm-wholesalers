@@ -1,0 +1,85 @@
+export type Segmento = "TOP3" | "CLAVE";
+export type TipoNota = "visita" | "llamada" | "acuerdo" | "rechazo" | "nota";
+
+export interface Cliente {
+  id: string;
+  nombre: string;
+  rut: string | null;
+  comuna: string | null;
+  cliente_desde: string | null;
+  segmento: Segmento;
+  activo: boolean;
+  dias_inventario: number | null;
+  credito_disponible: number | null;
+}
+
+// Fila del RPC resumen_cartera
+export interface ResumenCliente {
+  cliente_id: string;
+  nombre: string;
+  segmento: Segmento;
+  comuna: string | null;
+  dias_inventario: number | null;
+  credito_disponible: number | null;
+  ytd_eus: number;
+  ytd_ly_eus: number;
+  plan_ytd_eus: number;
+  mes_eus: number;
+  plan_mes_eus: number;
+  fy_ly_eus: number;
+  plan_fy_eus: number;
+  ultima_visita: string | null;
+}
+
+// Señales de "Compra Inteligente"
+export type TipoSenal = "gap_ly" | "inventario_bajo" | "credito_disponible";
+
+export interface Senal {
+  tipo: TipoSenal;
+  etiqueta: string;
+  detalle: string;
+}
+
+export interface MixCategoriaRow {
+  categoria: string;
+  eus_cliente: number;
+  eus_segmento: number;
+  eus_cartera: number;
+}
+
+export interface SeriePeriodoRow {
+  periodo: number;
+  eus_actual: number;
+  eus_ly: number;
+}
+
+export interface CeldaPlanRow {
+  cliente_id: string;
+  nombre: string;
+  segmento: Segmento;
+  periodo: number;
+  ly_eus: number;
+  plan_eus: number;
+  real_eus: number;
+}
+
+export interface Nota {
+  id: string;
+  cliente_id: string;
+  fecha: string;
+  tipo: TipoNota;
+  contenido_raw: string;
+  creado_por_agente: boolean;
+}
+
+export interface Perfil {
+  cliente_id: string;
+  decisor: string | null;
+  estilo_negociacion: string | null;
+  frecuencia_compra: string | null;
+  marcas_afines: string[];
+  rechazos: unknown[];
+  acuerdos: unknown[];
+  resumen: string | null;
+  actualizado_at: string;
+}

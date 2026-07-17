@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-poppins), var(--font-inter), ui-sans-serif, sans-serif;
+
+  /* Tokens del mockup aprobado (crm-mayoristas-bosquejo-v2) */
+  --color-fondo: #f5f6f8;
+  --color-verde: #2e9e5b;
+  --color-verde-suave: #e7f4ec;
+  --color-ambar: #c77d1e;
+  --color-ambar-suave: #fbf1e2;
+  --color-rojo: #d14d3b;
+  --color-rojo-suave: #fbeae7;
+  --color-azul: #4a5fa5;
+  --color-azul-suave: #ebeef8;
+
+  --shadow-card: 0 1px 3px rgba(31, 41, 55, 0.06);
+  --radius-card: 1rem;
+}
+
+body {
+  background-color: var(--color-fondo);
+}
