@@ -14,7 +14,7 @@ import {
   pctVsLY,
   senalesCliente,
 } from "@/lib/metrics";
-import { resumenCartera } from "@/lib/queries";
+import { resumenCartera, serieCanal } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +37,10 @@ export default async function Dashboard({
       ? filtroParam
       : "todas";
 
-  const { fy, periodo, clientes } = await resumenCartera();
+  const [{ fy, periodo, clientes }, canal] = await Promise.all([
+    resumenCartera(),
+    serieCanal(),
+  ]);
 
   const totalMes = clientes.reduce((acc, c) => acc + Number(c.mes_eus), 0);
   const totalYtd = clientes.reduce((acc, c) => acc + Number(c.ytd_eus), 0);
@@ -51,6 +54,14 @@ export default async function Dashboard({
     0,
   );
   const totalMesLy = clientes.reduce((acc, c) => acc + Number(c.mes_ly_eus), 0);
+
+  // Metas a nivel CANAL COMPLETO: la cola larga "empata LY" por defecto,
+  // así que su plan implícito es su real del año pasado.
+  const canalMes = canal.serie.find((p) => p.periodo === periodo);
+  const canalMesEus = Number(canalMes?.eus_actual ?? 0);
+  const canalMesLy = Number(canalMes?.eus_ly ?? 0);
+  const restoMesLy = canalMesLy - totalMesLy;
+  const planCanalMes = totalPlanMes + restoMesLy;
 
   const conSenales = clientes.filter((c) => senalesCliente(c).length > 0);
 
@@ -76,21 +87,21 @@ export default async function Dashboard({
       <GloboMes
         fy={fy}
         periodo={periodo}
-        mesEus={totalMes}
-        planMesEus={totalPlanMes}
-        mesLyEus={totalMesLy}
+        mesEus={canalMesEus}
+        planMesEus={planCanalMes}
+        mesLyEus={canalMesLy}
       />
 
       <section className="mb-6 grid grid-cols-3 gap-4">
         <KpiCard
           icono="📦"
-          etiqueta={`Volumen ${etiquetaPeriodo(periodo)}`}
+          etiqueta={`Volumen ${etiquetaPeriodo(periodo)} · cartera`}
           valor={`${formatEUs(totalMes)} EUs`}
           detalle={`YTD ${etiquetaFY(fy)}: ${formatEUs(totalYtd)} EUs`}
         />
         <KpiCard
           icono="🎯"
-          etiqueta="Avance YTD vs plan"
+          etiqueta="Avance YTD cartera vs plan"
           valor={
             totalPlanYtd > 0
               ? `${Math.round((totalYtd / totalPlanYtd) * 100)}%`
@@ -167,8 +178,9 @@ export default async function Dashboard({
                     <Link
                       href={`/clientes/${c.cliente_id}`}
                       className="font-medium text-gray-900 hover:text-verde"
+                      title={c.nombre}
                     >
-                      {c.nombre}
+                      {c.nombre_corto ?? c.nombre}
                     </Link>
                     <div className="mt-0.5 flex items-center gap-2">
                       <Chip variante={c.segmento === "TOP3" ? "verde" : "azul"}>

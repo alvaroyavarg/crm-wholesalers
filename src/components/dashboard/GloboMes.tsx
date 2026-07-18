@@ -33,8 +33,9 @@ export function GloboMes({
       <div className="flex items-start justify-between gap-8">
         <div className="min-w-0">
           <p className="text-sm text-gray-500">
-            Avance del mes · {etiquetaPeriodo(periodo)} ({mesDePeriodo(periodo)}){" "}
-            {etiquetaFY(fy)} · día {diaHoy} de {diasMes}
+            Avance del mes · <span className="font-medium text-gray-700">Canal completo</span> ·{" "}
+            {etiquetaPeriodo(periodo)} ({mesDePeriodo(periodo)}) {etiquetaFY(fy)} ·
+            día {diaHoy} de {diasMes}
           </p>
           <div className="mt-1 flex items-baseline gap-3">
             <span className="font-display text-4xl font-semibold text-gray-900">

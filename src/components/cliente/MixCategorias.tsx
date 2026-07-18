@@ -68,8 +68,8 @@ export function MixCategorias({
       })}
       <p className="pt-1 text-[11px] text-gray-400">
         Barra verde: mix del cliente · Marca azul: promedio{" "}
-        {segmento === "TOP3" ? "de la cartera" : "del segmento CLAVE"} (últimos
-        12 meses)
+        {segmento === "TOP3" ? "del canal completo" : "del segmento CLAVE"}{" "}
+        (últimos 12 meses)
       </p>
     </div>
   );

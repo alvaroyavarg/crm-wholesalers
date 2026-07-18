@@ -59,15 +59,19 @@ export default async function FichaClientePage({
           <div>
             <div className="flex items-center gap-3">
               <h1 className="font-display text-2xl font-semibold text-gray-900">
-                {cliente.nombre}
+                {cliente.nombre_corto ?? cliente.nombre}
               </h1>
               <Chip variante={cliente.segmento === "TOP3" ? "verde" : "azul"}>
                 {cliente.segmento}
               </Chip>
+              {cliente.bottler && <Chip variante="gris">{cliente.bottler}</Chip>}
             </div>
             <p className="mt-1 text-sm text-gray-500">
+              {cliente.nombre_corto && <>{cliente.nombre} · </>}
               {cliente.rut && <>RUT {cliente.rut} · </>}
-              {cliente.comuna && <>{cliente.comuna} · </>}
+              {(cliente.comuna ?? cliente.region) && (
+                <>{cliente.comuna ?? cliente.region} · </>
+              )}
               {cliente.cliente_desde && (
                 <>Cliente desde {new Date(cliente.cliente_desde).getFullYear()}</>
               )}

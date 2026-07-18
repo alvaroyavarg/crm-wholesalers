@@ -105,6 +105,17 @@ export async function listarBoletines() {
   return boletines;
 }
 
+// Serie mensual del canal completo (cartera + cola larga) — las metas son del canal.
+export async function serieCanal() {
+  const supabase = await createClient();
+  const { fy, periodo } = fiscalActual();
+
+  const { data, error } = await supabase.rpc("serie_canal", { p_fy: fy });
+  if (error) throw new Error(`serie_canal: ${error.message}`);
+
+  return { fy, periodo, serie: (data ?? []) as SeriePeriodoRow[] };
+}
+
 export async function planMatriz() {
   const supabase = await createClient();
   const { fy, periodo } = fiscalActual();

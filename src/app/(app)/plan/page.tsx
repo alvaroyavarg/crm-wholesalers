@@ -4,7 +4,7 @@ import { Chip } from "@/components/ui/Chip";
 import { PlanGrid } from "@/components/plan/PlanGrid";
 import { etiquetaFY, etiquetaPeriodo } from "@/lib/fiscal";
 import { formatEUs, formatPct, pctVsLY } from "@/lib/metrics";
-import { planMatriz } from "@/lib/queries";
+import { planMatriz, serieCanal } from "@/lib/queries";
 import type { CeldaPlanRow, Segmento } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,10 @@ export default async function PlanPage({
   searchParams: Promise<{ cliente?: string }>;
 }) {
   const { cliente: clienteSel } = await searchParams;
-  const { fy, periodo, celdas } = await planMatriz();
+  const [{ fy, periodo, celdas }, canal] = await Promise.all([
+    planMatriz(),
+    serieCanal(),
+  ]);
 
   // Agrupar celdas por cliente
   const porCliente = new Map<string, FilaCliente>();
@@ -35,7 +38,7 @@ export default async function PlanPage({
     if (!fila) {
       fila = {
         cliente_id: c.cliente_id,
-        nombre: c.nombre,
+        nombre: c.nombre_corto ?? c.nombre,
         segmento: c.segmento,
         celdas: [],
         lyTotal: 0,
@@ -65,6 +68,22 @@ export default async function PlanPage({
     }),
     { ly: 0, plan: 0, realYtd: 0, planYtd: 0 },
   );
+
+  // Resto del canal (cola larga KOA/KOE): meta implícita = empatar su LY.
+  const canalLyTotal = canal.serie.reduce((a, p) => a + Number(p.eus_ly), 0);
+  const canalRealYtd = canal.serie
+    .filter((p) => p.periodo <= periodo)
+    .reduce((a, p) => a + Number(p.eus_actual), 0);
+  const canalLyYtd = canal.serie
+    .filter((p) => p.periodo <= periodo)
+    .reduce((a, p) => a + Number(p.eus_ly), 0);
+  const resto = {
+    ly: canalLyTotal - totales.ly,
+    plan: canalLyTotal - totales.ly, // empatar LY
+    realYtd: canalRealYtd - totales.realYtd,
+    planYtd: canalLyYtd - totales.planYtd > 0 ? canalLyYtd - totales.planYtd : 0,
+  };
+  const hayResto = resto.ly > 0 || resto.realYtd > 0;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -218,6 +237,57 @@ export default async function PlanPage({
                 </td>
                 <td />
               </tr>
+              {hayResto && (
+                <>
+                  <tr className="text-gray-500">
+                    <td className="px-5 py-3">
+                      Resto del canal (cola larga)
+                      <span className="ml-2 text-xs text-gray-400">
+                        meta = empatar LY
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {formatEUs(resto.ly)}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {formatEUs(resto.plan)}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">—</td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {formatEUs(resto.realYtd)}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {resto.planYtd > 0
+                        ? `${Math.round((resto.realYtd / resto.planYtd) * 100)}%`
+                        : "—"}
+                    </td>
+                    <td />
+                  </tr>
+                  <tr className="border-t-2 border-gray-200 bg-verde-suave/40 font-semibold text-gray-900">
+                    <td className="px-5 py-3">Total canal completo</td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {formatEUs(totales.ly + resto.ly)}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {formatEUs(totales.plan + resto.plan)}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {formatPct(
+                        pctVsLY(totales.plan + resto.plan, totales.ly + resto.ly),
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {formatEUs(canalRealYtd)}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {totales.planYtd + resto.planYtd > 0
+                        ? `${Math.round((canalRealYtd / (totales.planYtd + resto.planYtd)) * 100)}%`
+                        : "—"}
+                    </td>
+                    <td />
+                  </tr>
+                </>
+              )}
             </tfoot>
           </table>
         </Card>

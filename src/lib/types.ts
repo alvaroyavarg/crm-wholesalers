@@ -4,8 +4,11 @@ export type TipoNota = "visita" | "llamada" | "acuerdo" | "rechazo" | "nota";
 export interface Cliente {
   id: string;
   nombre: string;
+  nombre_corto: string | null;
   rut: string | null;
   comuna: string | null;
+  region: string | null;
+  bottler: string | null;
   cliente_desde: string | null;
   segmento: Segmento;
   activo: boolean;
@@ -17,6 +20,7 @@ export interface Cliente {
 export interface ResumenCliente {
   cliente_id: string;
   nombre: string;
+  nombre_corto: string | null;
   segmento: Segmento;
   comuna: string | null;
   dias_inventario: number | null;
@@ -79,6 +83,7 @@ export interface SeriePeriodoRow {
 export interface CeldaPlanRow {
   cliente_id: string;
   nombre: string;
+  nombre_corto: string | null;
   segmento: Segmento;
   periodo: number;
   ly_eus: number;

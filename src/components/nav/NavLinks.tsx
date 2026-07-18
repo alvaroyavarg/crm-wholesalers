@@ -7,12 +7,10 @@ const enlaces = [
   { href: "/", etiqueta: "Dashboard", icono: "📊" },
   { href: "/plan", etiqueta: "Plan de venta", icono: "🎯" },
   { href: "/boletines", etiqueta: "Boletines", icono: "📰" },
+  { href: "/datos", etiqueta: "Datos", icono: "🗂️" },
 ];
 
-const proximamente = [
-  { etiqueta: "Copiloto", icono: "✨", fase: "Fase 3" },
-  { etiqueta: "Datos", icono: "🗂️", fase: "Fase 2" },
-];
+const proximamente = [{ etiqueta: "Copiloto", icono: "✨", fase: "Fase 3" }];
 
 export function NavLinks() {
   const pathname = usePathname();
