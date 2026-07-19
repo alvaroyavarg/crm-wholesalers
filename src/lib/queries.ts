@@ -8,6 +8,7 @@ import type {
   Contacto,
   ItemDetalle,
   MixCategoriaRow,
+  MixSkuRow,
   Nota,
   Perfil,
   ResumenCliente,
@@ -75,6 +76,7 @@ export async function fichaCliente(id: string, fyDetalleParam?: number) {
     resumenRes,
     contactosRes,
     detalleRes,
+    mixSkusRes,
   ] = await Promise.all([
       supabase.from("clientes").select("*").eq("id", id).single(),
       supabase.from("perfiles").select("*").eq("cliente_id", id).maybeSingle(),
@@ -93,6 +95,7 @@ export async function fichaCliente(id: string, fyDetalleParam?: number) {
         .eq("cliente_id", id)
         .order("creado_at", { ascending: true }),
       supabase.rpc("detalle_cliente", { p_cliente: id, p_fy: fyDetalle }),
+      supabase.rpc("mix_skus", { p_cliente: id }),
     ]);
 
   if (clienteRes.error)
@@ -116,6 +119,8 @@ export async function fichaCliente(id: string, fyDetalleParam?: number) {
     fyDetalle,
     // null si la función SQL aún no existe (migración 0005 pendiente)
     detalle: detalleRes.error ? null : ((detalleRes.data ?? []) as ItemDetalle[]),
+    // null si la migración 0006 está pendiente
+    mixSkus: mixSkusRes.error ? null : ((mixSkusRes.data ?? []) as MixSkuRow[]),
   };
 }
 

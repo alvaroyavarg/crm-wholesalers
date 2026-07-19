@@ -57,6 +57,7 @@ export default async function FichaClientePage({
     fys,
     fyDetalle,
     detalle,
+    mixSkus,
   } = data;
   const vsLy = resumen
     ? pctVsLY(Number(resumen.ytd_eus), Number(resumen.ytd_ly_eus))
@@ -152,7 +153,11 @@ export default async function FichaClientePage({
             <h2 className="mb-4 font-display text-base font-semibold text-gray-900">
               Mix por categoría vs pares
             </h2>
-            <MixCategorias mix={mix} segmento={cliente.segmento} />
+            <MixCategorias
+              mix={mix}
+              skus={mixSkus}
+              segmento={cliente.segmento}
+            />
           </Card>
 
           <Card>

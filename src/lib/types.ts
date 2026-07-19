@@ -74,6 +74,15 @@ export interface MixCategoriaRow {
   eus_cartera: number;
 }
 
+export interface MixSkuRow {
+  categoria: string;
+  marca: string;
+  formato: string;
+  eus_cliente: number;
+  eus_segmento: number;
+  eus_canal: number;
+}
+
 export interface SeriePeriodoRow {
   periodo: number;
   eus_actual: number;
