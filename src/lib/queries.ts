@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
-import { fiscalActual } from "./fiscal";
+import { aFiscal, fiscalActual } from "./fiscal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   Boletin,
   CeldaPlanRow,
   Cliente,
   Contacto,
+  ItemDetalle,
   MixCategoriaRow,
   Nota,
   Perfil,
@@ -26,9 +27,44 @@ export async function resumenCartera() {
   return { fy, periodo, clientes: (data ?? []) as ResumenCliente[] };
 }
 
-export async function fichaCliente(id: string) {
+export async function fichaCliente(id: string, fyDetalleParam?: number) {
   const supabase = await createClient();
   const { fy, periodo } = fiscalActual();
+
+  // Rango de FYs con data del cliente (para el selector del detalle)
+  const [minRes, maxRes] = await Promise.all([
+    supabase
+      .from("ventas")
+      .select("periodo")
+      .eq("cliente_id", id)
+      .order("periodo", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("ventas")
+      .select("periodo")
+      .eq("cliente_id", id)
+      .order("periodo", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const fyMin = minRes.data
+    ? aFiscal(new Date(`${minRes.data.periodo}T12:00:00`)).fy
+    : fy;
+  const fyMax = Math.max(
+    maxRes.data ? aFiscal(new Date(`${maxRes.data.periodo}T12:00:00`)).fy : fy,
+    fy,
+  );
+  const fys: number[] = [];
+  for (let f = fyMax; f >= fyMin; f--) fys.push(f);
+
+  const fyDetalle =
+    fyDetalleParam && fys.includes(fyDetalleParam)
+      ? fyDetalleParam
+      : maxRes.data
+        ? aFiscal(new Date(`${maxRes.data.periodo}T12:00:00`)).fy
+        : fy;
 
   const [
     clienteRes,
@@ -38,6 +74,7 @@ export async function fichaCliente(id: string) {
     serieRes,
     resumenRes,
     contactosRes,
+    detalleRes,
   ] = await Promise.all([
       supabase.from("clientes").select("*").eq("id", id).single(),
       supabase.from("perfiles").select("*").eq("cliente_id", id).maybeSingle(),
@@ -55,6 +92,7 @@ export async function fichaCliente(id: string) {
         .select("*")
         .eq("cliente_id", id)
         .order("creado_at", { ascending: true }),
+      supabase.rpc("detalle_cliente", { p_cliente: id, p_fy: fyDetalle }),
     ]);
 
   if (clienteRes.error)
@@ -74,6 +112,10 @@ export async function fichaCliente(id: string) {
     serie: (serieRes.data ?? []) as SeriePeriodoRow[],
     resumen: resumen ?? null,
     contactos: (contactosRes.data ?? []) as Contacto[],
+    fys,
+    fyDetalle,
+    // null si la función SQL aún no existe (migración 0005 pendiente)
+    detalle: detalleRes.error ? null : ((detalleRes.data ?? []) as ItemDetalle[]),
   };
 }
 

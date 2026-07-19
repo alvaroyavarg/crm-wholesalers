@@ -38,6 +38,37 @@ export async function guardarPlan(
   revalidatePath("/");
 }
 
+// ---- Notas / visitas ----
+
+const TIPOS_NOTA = ["visita", "llamada", "acuerdo", "rechazo", "nota"] as const;
+
+export async function crearNota(input: {
+  clienteId: string;
+  tipo: string;
+  contenido: string;
+}) {
+  const tipo = TIPOS_NOTA.includes(input.tipo as (typeof TIPOS_NOTA)[number])
+    ? input.tipo
+    : "nota";
+  const contenido = input.contenido.trim();
+  if (!input.clienteId || !contenido) {
+    throw new Error("Falta el cliente o el contenido de la nota");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("notas").insert({
+    cliente_id: input.clienteId,
+    tipo,
+    contenido_raw: contenido,
+    creado_por_agente: false,
+    // contenido_estructurado: lo completa el agente en la Fase 3
+  });
+  if (error) throw new Error(`crearNota: ${error.message}`);
+
+  revalidatePath("/");
+  revalidatePath(`/clientes/${input.clienteId}`);
+}
+
 // ---- Contactos claves ----
 
 export async function agregarContacto(formData: FormData) {

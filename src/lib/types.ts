@@ -91,6 +91,17 @@ export interface CeldaPlanRow {
   real_eus: number;
 }
 
+// Item del detalle de compras (RPC detalle_cliente): un SKU con su serie
+// mensual [eus, eus_ly] por período.
+export interface ItemDetalle {
+  categoria: string;
+  marca: string;
+  formato: string;
+  meses: Record<string, [number, number]>;
+  total: number;
+  total_ly: number;
+}
+
 export interface Nota {
   id: string;
   cliente_id: string;

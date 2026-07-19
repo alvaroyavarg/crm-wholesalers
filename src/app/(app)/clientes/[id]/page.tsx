@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { ContactosClaves } from "@/components/cliente/ContactosClaves";
+import { DetalleCompras } from "@/components/cliente/DetalleCompras";
 import { MixCategorias } from "@/components/cliente/MixCategorias";
 import { etiquetaFY, etiquetaPeriodo, mesDePeriodo } from "@/lib/fiscal";
 import {
@@ -28,20 +29,35 @@ const iconoNota: Record<TipoNota, string> = {
 
 export default async function FichaClientePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ fy?: string }>;
 }) {
   const { id } = await params;
+  const { fy: fyParam } = await searchParams;
 
   let data;
   try {
-    data = await fichaCliente(id);
+    data = await fichaCliente(id, fyParam ? Number(fyParam) : undefined);
   } catch {
     notFound();
   }
 
-  const { fy, periodo, cliente, perfil, notas, mix, serie, resumen, contactos } =
-    data;
+  const {
+    fy,
+    periodo,
+    cliente,
+    perfil,
+    notas,
+    mix,
+    serie,
+    resumen,
+    contactos,
+    fys,
+    fyDetalle,
+    detalle,
+  } = data;
   const vsLy = resumen
     ? pctVsLY(Number(resumen.ytd_eus), Number(resumen.ytd_ly_eus))
     : null;
@@ -231,6 +247,20 @@ export default async function FichaClientePage({
               Δ %: crecimiento (verde) o caída (rojo) de {etiquetaFY(fy)} vs el
               mismo mes de {etiquetaFY(fy - 1)}
             </p>
+          </Card>
+
+          <Card>
+            <h2 className="mb-4 font-display text-base font-semibold text-gray-900">
+              Detalle de compras {etiquetaFY(fyDetalle)}
+            </h2>
+            <DetalleCompras
+              clienteId={cliente.id}
+              fy={fyDetalle}
+              fys={fys}
+              periodoActual={periodo}
+              fyActual={fy}
+              items={detalle}
+            />
           </Card>
 
           <Card>

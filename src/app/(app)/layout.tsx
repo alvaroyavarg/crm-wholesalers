@@ -1,9 +1,23 @@
 import { NavLinks } from "@/components/nav/NavLinks";
+import { NotaRapida } from "@/components/notas/NotaRapida";
+import { createClient } from "@/lib/supabase/server";
 import { cerrarSesion } from "./actions";
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const supabase = await createClient();
+  const { data: clientesActivos } = await supabase
+    .from("clientes")
+    .select("id, nombre, nombre_corto")
+    .eq("activo", true)
+    .order("nombre");
+
+  const opciones = (clientesActivos ?? []).map((c) => ({
+    id: c.id as string,
+    nombre: (c.nombre_corto ?? c.nombre) as string,
+  }));
+
   return (
     <div className="flex min-h-screen">
       <aside className="fixed inset-y-0 left-0 flex w-60 flex-col border-r border-gray-100 bg-white p-4">
@@ -32,6 +46,8 @@ export default function AppLayout({
       </aside>
 
       <main className="ml-60 flex-1 p-8">{children}</main>
+
+      <NotaRapida clientes={opciones} />
     </div>
   );
 }
