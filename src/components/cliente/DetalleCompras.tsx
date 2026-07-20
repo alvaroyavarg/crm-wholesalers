@@ -43,6 +43,7 @@ export function DetalleCompras({
 }) {
   const [dimension, setDimension] = useState<Dimension>("marca");
   const [compararLy, setCompararLy] = useState(true);
+  const [busqueda, setBusqueda] = useState("");
 
   const filas = useMemo<FilaPivot[]>(() => {
     if (!items) return [];
@@ -72,6 +73,16 @@ export function DetalleCompras({
     );
   }, [items, dimension]);
 
+  const filasVisibles = useMemo(() => {
+    const terminos = busqueda.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (terminos.length === 0) return filas;
+    // Todos los términos deben aparecer (ej: "red 0.75" → "JW Red Label · 0.75L")
+    return filas.filter((f) => {
+      const nombre = f.clave.toLowerCase();
+      return terminos.every((t) => nombre.includes(t));
+    });
+  }, [filas, busqueda]);
+
   const totalFila = useMemo<FilaPivot>(() => {
     const t: FilaPivot = {
       clave: "Total",
@@ -80,7 +91,7 @@ export function DetalleCompras({
       total: 0,
       totalLy: 0,
     };
-    for (const f of filas) {
+    for (const f of filasVisibles) {
       for (let i = 0; i < 12; i++) {
         t.actual[i] += f.actual[i];
         t.ly[i] += f.ly[i];
@@ -89,7 +100,7 @@ export function DetalleCompras({
       t.totalLy += f.totalLy;
     }
     return t;
-  }, [filas]);
+  }, [filasVisibles]);
 
   if (items === null) {
     return (
@@ -172,11 +183,38 @@ export function DetalleCompras({
         </div>
       </div>
 
+      <div className="relative mb-3">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-300">
+          🔍
+        </span>
+        <input
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder={`Buscar ${
+            dimension === "sku"
+              ? "SKU (ej: Red 0.75, Buchanan's)"
+              : dimension === "marca"
+                ? "marca"
+                : "categoría"
+          }…`}
+          className="w-full rounded-lg border border-gray-200 py-1.5 pl-9 pr-3 text-xs outline-none focus:border-verde focus:ring-2 focus:ring-verde-suave"
+        />
+        {busqueda && (
+          <button
+            onClick={() => setBusqueda("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            title="Limpiar"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
       <div className="max-h-[26rem] overflow-auto rounded-xl border border-gray-100">
         <table className="w-full text-xs">
           <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_#f3f4f6]">
             <tr className="text-left text-gray-400">
-              <th className="sticky left-0 bg-white py-2 pl-3 pr-2 font-medium">
+              <th className="sticky left-0 min-w-[200px] bg-white py-2 pl-3 pr-2 font-medium">
                 {DIMENSIONES.find((d) => d.valor === dimension)?.etiqueta}
               </th>
               {MESES_P.map((m, i) => (
@@ -199,13 +237,23 @@ export function DetalleCompras({
             </tr>
           </thead>
           <tbody>
-            {filas.map((f) => (
+            {filasVisibles.length === 0 && (
+              <tr>
+                <td
+                  colSpan={15}
+                  className="px-4 py-6 text-center text-gray-400"
+                >
+                  Sin resultados para “{busqueda}”.
+                </td>
+              </tr>
+            )}
+            {filasVisibles.map((f) => (
               <tr
                 key={f.clave}
                 className="border-t border-gray-50 hover:bg-gray-50/60"
               >
                 <td
-                  className="sticky left-0 max-w-44 truncate bg-white py-2 pl-3 pr-2 font-medium text-gray-800"
+                  className="sticky left-0 min-w-[200px] max-w-[280px] whitespace-normal break-words bg-white py-2 pl-3 pr-2 font-medium leading-tight text-gray-800"
                   title={f.clave}
                 >
                   {f.clave}
@@ -237,7 +285,9 @@ export function DetalleCompras({
           </tbody>
           <tfoot className="sticky bottom-0 bg-gray-50">
             <tr className="border-t border-gray-100 font-semibold text-gray-900">
-              <td className="sticky left-0 bg-gray-50 py-2 pl-3 pr-2">Total</td>
+              <td className="sticky left-0 min-w-[200px] bg-gray-50 py-2 pl-3 pr-2">
+                Total
+              </td>
               {MESES_P.map((_, i) => (
                 <td key={i} className="px-1.5 py-2 text-right tabular-nums">
                   {celda(totalFila, i)}
