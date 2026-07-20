@@ -13,3 +13,6 @@ next-env.d.ts
 # misc
 .DS_Store
 *.tsbuildinfo
+
+# Claude Code local settings (contiene permisos/comandos con posibles secretos)
+.claude/settings.local.json
