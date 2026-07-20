@@ -72,6 +72,40 @@ export async function crearNota(input: {
 
 // ---- Recomendaciones del copiloto ----
 
+// Gatilla el análisis del copiloto para UNA cuenta desde su ficha:
+// cruza ventas vs LY, pares, perfil, notas y boletines vigentes, y crea
+// recomendaciones con evidencia. Devuelve un resumen corto.
+export async function generarRecomendacionesCliente(clienteId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Sesión expirada. Vuelve a ingresar.");
+
+  const { data: cli } = await supabase
+    .from("clientes")
+    .select("nombre, nombre_corto")
+    .eq("id", clienteId)
+    .single();
+  const nombre = cli?.nombre_corto ?? cli?.nombre ?? "el cliente";
+
+  const { correrAgente } = await import("@/lib/agente/loop");
+  const resultado = await correrAgente(supabase, [
+    {
+      role: "user",
+      content:
+        `Analiza a ${nombre} (id: ${clienteId}): ventas vs LY, comparación con pares, perfil, notas y boletines vigentes. ` +
+        `Crea hasta 3 recomendaciones concretas y accionables con crear_recomendacion (cada una con su evidencia). ` +
+        `Si hay boletines vigentes, cruza las oportunidades con sus escalones y descuentos. ` +
+        `Al final responde SOLO con un resumen de 2 a 3 líneas de lo que encontraste y creaste.`,
+    },
+  ]);
+
+  revalidatePath(`/clientes/${clienteId}`);
+  revalidatePath("/copiloto");
+  return { ok: true, resumen: resultado.texto };
+}
+
 export async function cambiarEstadoRecomendacion(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const estado = String(formData.get("estado") ?? "");

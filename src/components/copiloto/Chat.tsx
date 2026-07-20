@@ -43,10 +43,10 @@ const SUGERENCIAS = [
   "¿A quién le conviene un escalón de un boletín vigente?",
 ];
 
-export function Chat() {
+export function Chat({ preguntaInicial = "" }: { preguntaInicial?: string }) {
   const router = useRouter();
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(preguntaInicial);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const finRef = useRef<HTMLDivElement>(null);

@@ -5,7 +5,12 @@ import { recomendacionesFeed } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function CopilotoPage() {
+export default async function CopilotoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pregunta?: string }>;
+}) {
+  const { pregunta } = await searchParams;
   const recomendaciones = await recomendacionesFeed();
 
   return (
@@ -21,7 +26,7 @@ export default async function CopilotoPage() {
 
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2">
-          <Chat />
+          <Chat preguntaInicial={pregunta ?? ""} />
         </div>
         <div>
           <Card>

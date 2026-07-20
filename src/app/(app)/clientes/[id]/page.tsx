@@ -5,7 +5,7 @@ import { Chip } from "@/components/ui/Chip";
 import { ContactosClaves } from "@/components/cliente/ContactosClaves";
 import { DetalleCompras } from "@/components/cliente/DetalleCompras";
 import { MixCategorias } from "@/components/cliente/MixCategorias";
-import { FeedRecomendaciones } from "@/components/copiloto/FeedRecomendaciones";
+import { RecomendacionesCliente } from "@/components/cliente/RecomendacionesCliente";
 import { etiquetaFY, etiquetaPeriodo, mesDePeriodo } from "@/lib/fiscal";
 import {
   formatCLP,
@@ -19,6 +19,7 @@ import { fichaCliente } from "@/lib/queries";
 import type { TipoNota } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // generar recomendaciones corre el loop del agente
 
 const iconoNota: Record<TipoNota, string> = {
   visita: "🚗",
@@ -274,7 +275,11 @@ export default async function FichaClientePage({
             <h2 className="mb-4 font-display text-base font-semibold text-gray-900">
               Recomendaciones del copiloto
             </h2>
-            <FeedRecomendaciones recomendaciones={recomendaciones} />
+            <RecomendacionesCliente
+              clienteId={cliente.id}
+              nombre={cliente.nombre_corto ?? cliente.nombre}
+              recomendaciones={recomendaciones}
+            />
           </Card>
         </div>
 
