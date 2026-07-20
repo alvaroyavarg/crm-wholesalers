@@ -130,7 +130,7 @@ export async function listarBoletines() {
   const { data, error } = await supabase
     .from("boletines")
     .select(
-      "id, titulo, origen, fecha_publicacion, vigente_desde, vigente_hasta, resumen_accionable, archivo_url",
+      "id, titulo, origen, fecha_publicacion, vigente_desde, vigente_hasta, resumen_accionable, archivo_url, promociones, focos, analizado_at",
     )
     .order("vigente_desde", { ascending: false });
   if (error) throw new Error(`boletines: ${error.message}`);

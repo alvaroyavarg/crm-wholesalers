@@ -1,17 +1,9 @@
 import { Card } from "@/components/ui/Card";
-import { Chip } from "@/components/ui/Chip";
-import { eliminarBoletin, subirBoletin } from "@/app/(app)/actions";
+import { subirBoletin } from "@/app/(app)/actions";
+import { BoletinItem } from "@/components/boletines/BoletinItem";
 import { listarBoletines } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
-
-function formatFechaCorta(iso: string): string {
-  return new Intl.DateTimeFormat("es-CL", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(`${iso}T12:00:00`));
-}
 
 export default async function BoletinesPage() {
   const boletines = await listarBoletines();
@@ -32,8 +24,8 @@ export default async function BoletinesPage() {
         </h1>
         <p className="text-sm text-gray-500">
           Boletines mensuales por embotellador — KOA (Andina) y KOE (Embonor).
-          En Fase 2 el copiloto extraerá automáticamente escalones, descuentos y
-          vigencias de cada boletín.
+          Al cargar un boletín, la IA extrae automáticamente escalones,
+          descuentos y focos por SKU.
         </p>
       </header>
 
@@ -55,71 +47,14 @@ export default async function BoletinesPage() {
                 </p>
               ) : (
                 <ul>
-                  {grupo.items.map((b) => {
-                    const vigente =
-                      b.vigente_desde <= hoy && b.vigente_hasta >= hoy;
-                    return (
-                      <li
-                        key={b.id}
-                        className="flex items-center justify-between gap-4 border-b border-gray-50 px-5 py-4 last:border-0"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate font-medium text-gray-900">
-                              {b.titulo}
-                            </p>
-                            <Chip variante={b.origen === "KOA" ? "azul" : "ambar"}>
-                              {b.origen}
-                            </Chip>
-                            <Chip variante={vigente ? "verde" : "gris"}>
-                              {vigente ? "Vigente" : "Fuera de vigencia"}
-                            </Chip>
-                          </div>
-                          <p className="mt-0.5 text-xs text-gray-400">
-                            Vigencia: {formatFechaCorta(b.vigente_desde)} —{" "}
-                            {formatFechaCorta(b.vigente_hasta)}
-                          </p>
-                          {b.resumen_accionable ? (
-                            <p className="mt-1 text-sm text-gray-600">
-                              {b.resumen_accionable}
-                            </p>
-                          ) : (
-                            <p className="mt-1 text-xs italic text-gray-300">
-                              Resumen accionable pendiente (se genera con IA en
-                              Fase 2)
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-3">
-                          {b.urlFirmada && (
-                            <a
-                              href={b.urlFirmada}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-sm font-medium text-verde hover:underline"
-                            >
-                              Ver archivo
-                            </a>
-                          )}
-                          <form action={eliminarBoletin}>
-                            <input type="hidden" name="id" value={b.id} />
-                            <input
-                              type="hidden"
-                              name="archivo_url"
-                              value={b.archivo_url ?? ""}
-                            />
-                            <button
-                              type="submit"
-                              className="text-sm text-gray-300 transition hover:text-rojo"
-                              title="Eliminar boletín"
-                            >
-                              Eliminar
-                            </button>
-                          </form>
-                        </div>
-                      </li>
-                    );
-                  })}
+                  {grupo.items.map((b) => (
+                    <BoletinItem
+                      key={b.id}
+                      boletin={b}
+                      urlFirmada={b.urlFirmada}
+                      vigente={b.vigente_desde <= hoy && b.vigente_hasta >= hoy}
+                    />
+                  ))}
                 </ul>
               )}
             </Card>

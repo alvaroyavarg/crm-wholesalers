@@ -47,6 +47,14 @@ export interface Contacto {
 
 export type OrigenBoletin = "KOA" | "KOE";
 
+export interface PromocionBoletin {
+  sku: string;
+  categoria: string;
+  detalle: string;
+  mejor_costo: string;
+  descuento_max: string;
+}
+
 export interface Boletin {
   id: string;
   titulo: string;
@@ -56,6 +64,9 @@ export interface Boletin {
   vigente_hasta: string;
   resumen_accionable: string | null;
   archivo_url: string | null; // path dentro del bucket "boletines"
+  promociones: PromocionBoletin[];
+  focos: string[];
+  analizado_at: string | null;
 }
 
 // Señales de "Compra Inteligente"
