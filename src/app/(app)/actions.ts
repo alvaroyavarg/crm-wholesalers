@@ -70,6 +70,25 @@ export async function crearNota(input: {
   revalidatePath(`/clientes/${input.clienteId}`);
 }
 
+// ---- Recomendaciones del copiloto ----
+
+export async function cambiarEstadoRecomendacion(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const estado = String(formData.get("estado") ?? "");
+  const clienteId = String(formData.get("cliente_id") ?? "");
+  if (!id || !["aceptada", "descartada"].includes(estado)) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("recomendaciones")
+    .update({ estado })
+    .eq("id", id);
+  if (error) throw new Error(`cambiarEstadoRecomendacion: ${error.message}`);
+
+  revalidatePath("/copiloto");
+  if (clienteId) revalidatePath(`/clientes/${clienteId}`);
+}
+
 // ---- Contactos claves ----
 
 export async function agregarContacto(formData: FormData) {

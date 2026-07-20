@@ -132,6 +132,24 @@ export interface ItemDetalle {
   total_ly: number;
 }
 
+export type TipoEvidencia = "ventas" | "memoria" | "boletin";
+export type EstadoRecomendacion = "nueva" | "aceptada" | "descartada";
+
+export interface EvidenciaItem {
+  tipo: TipoEvidencia;
+  detalle: string;
+}
+
+export interface Recomendacion {
+  id: string;
+  cliente_id: string;
+  texto: string;
+  evidencia: EvidenciaItem[];
+  estado: EstadoRecomendacion;
+  creada_at: string;
+  cliente_nombre?: string;
+}
+
 export interface Nota {
   id: string;
   cliente_id: string;

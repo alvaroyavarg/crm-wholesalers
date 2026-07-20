@@ -12,6 +12,7 @@ import type {
   MixSkuRow,
   Nota,
   Perfil,
+  Recomendacion,
   ResumenCliente,
   SeriePeriodoRow,
 } from "./types";
@@ -78,6 +79,7 @@ export async function fichaCliente(id: string, fyDetalleParam?: number) {
     contactosRes,
     detalleRes,
     mixSkusRes,
+    recomendacionesRes,
   ] = await Promise.all([
       supabase.from("clientes").select("*").eq("id", id).single(),
       supabase.from("perfiles").select("*").eq("cliente_id", id).maybeSingle(),
@@ -97,6 +99,12 @@ export async function fichaCliente(id: string, fyDetalleParam?: number) {
         .order("creado_at", { ascending: true }),
       supabase.rpc("detalle_cliente", { p_cliente: id, p_fy: fyDetalle }),
       supabase.rpc("mix_skus", { p_cliente: id }),
+      supabase
+        .from("recomendaciones")
+        .select("id, cliente_id, texto, evidencia, estado, creada_at")
+        .eq("cliente_id", id)
+        .eq("estado", "nueva")
+        .order("creada_at", { ascending: false }),
     ]);
 
   if (clienteRes.error)
@@ -122,7 +130,49 @@ export async function fichaCliente(id: string, fyDetalleParam?: number) {
     detalle: detalleRes.error ? null : ((detalleRes.data ?? []) as ItemDetalle[]),
     // null si la migración 0006 está pendiente
     mixSkus: mixSkusRes.error ? null : ((mixSkusRes.data ?? []) as MixSkuRow[]),
+    recomendaciones: (recomendacionesRes.data ?? []) as Recomendacion[],
   };
+}
+
+// Recomendaciones nuevas de un cliente (para la ficha).
+export async function recomendacionesCliente(clienteId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("recomendaciones")
+    .select("id, cliente_id, texto, evidencia, estado, creada_at")
+    .eq("cliente_id", clienteId)
+    .eq("estado", "nueva")
+    .order("creada_at", { ascending: false });
+  if (error) throw new Error(`recomendaciones: ${error.message}`);
+  return (data ?? []) as Recomendacion[];
+}
+
+// Feed global de recomendaciones nuevas (para el copiloto), con nombre de cliente.
+export async function recomendacionesFeed() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("recomendaciones")
+    .select("id, cliente_id, texto, evidencia, estado, creada_at, clientes(nombre, nombre_corto)")
+    .eq("estado", "nueva")
+    .order("creada_at", { ascending: false })
+    .limit(50);
+  if (error) throw new Error(`recomendaciones feed: ${error.message}`);
+  return (data ?? []).map((r) => {
+    const rel = r.clientes as
+      | { nombre: string; nombre_corto: string | null }
+      | { nombre: string; nombre_corto: string | null }[]
+      | null;
+    const cli = Array.isArray(rel) ? rel[0] : rel;
+    return {
+      id: r.id,
+      cliente_id: r.cliente_id,
+      texto: r.texto,
+      evidencia: r.evidencia,
+      estado: r.estado,
+      creada_at: r.creada_at,
+      cliente_nombre: cli?.nombre_corto ?? cli?.nombre ?? "Cliente",
+    } as Recomendacion;
+  });
 }
 
 export async function listarConocimiento() {

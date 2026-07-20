@@ -5,6 +5,7 @@ import { Chip } from "@/components/ui/Chip";
 import { ContactosClaves } from "@/components/cliente/ContactosClaves";
 import { DetalleCompras } from "@/components/cliente/DetalleCompras";
 import { MixCategorias } from "@/components/cliente/MixCategorias";
+import { FeedRecomendaciones } from "@/components/copiloto/FeedRecomendaciones";
 import { etiquetaFY, etiquetaPeriodo, mesDePeriodo } from "@/lib/fiscal";
 import {
   formatCLP,
@@ -58,6 +59,7 @@ export default async function FichaClientePage({
     fyDetalle,
     detalle,
     mixSkus,
+    recomendaciones,
   } = data;
   const vsLy = resumen
     ? pctVsLY(Number(resumen.ytd_eus), Number(resumen.ytd_ly_eus))
@@ -272,10 +274,7 @@ export default async function FichaClientePage({
             <h2 className="mb-4 font-display text-base font-semibold text-gray-900">
               Recomendaciones del copiloto
             </h2>
-            <p className="rounded-xl bg-gray-50 px-4 py-6 text-center text-sm text-gray-400">
-              El copiloto se activa en la Fase 3. Aquí verás recomendaciones con
-              evidencia (boletín, memoria o ventas) para esta cuenta.
-            </p>
+            <FeedRecomendaciones recomendaciones={recomendaciones} />
           </Card>
         </div>
 

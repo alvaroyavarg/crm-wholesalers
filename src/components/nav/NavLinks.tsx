@@ -6,12 +6,13 @@ import { usePathname } from "next/navigation";
 const enlaces = [
   { href: "/", etiqueta: "Dashboard", icono: "📊" },
   { href: "/plan", etiqueta: "Plan de venta", icono: "🎯" },
+  { href: "/copiloto", etiqueta: "Copiloto", icono: "✨" },
   { href: "/boletines", etiqueta: "Boletines", icono: "📰" },
   { href: "/estrategia", etiqueta: "Estrategia", icono: "🧭" },
   { href: "/datos", etiqueta: "Datos", icono: "🗂️" },
 ];
 
-const proximamente = [{ etiqueta: "Copiloto", icono: "✨", fase: "Fase 3" }];
+const proximamente: { etiqueta: string; icono: string; fase: string }[] = [];
 
 export function NavLinks() {
   const pathname = usePathname();
