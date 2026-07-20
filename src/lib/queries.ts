@@ -5,6 +5,7 @@ import type {
   Boletin,
   CeldaPlanRow,
   Cliente,
+  Conocimiento,
   Contacto,
   ItemDetalle,
   MixCategoriaRow,
@@ -122,6 +123,17 @@ export async function fichaCliente(id: string, fyDetalleParam?: number) {
     // null si la migración 0006 está pendiente
     mixSkus: mixSkusRes.error ? null : ((mixSkusRes.data ?? []) as MixSkuRow[]),
   };
+}
+
+export async function listarConocimiento() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("conocimiento")
+    .select("id, tipo, titulo, contenido, actualizado_at")
+    .order("tipo", { ascending: true })
+    .order("actualizado_at", { ascending: false });
+  if (error) throw new Error(`conocimiento: ${error.message}`);
+  return (data ?? []) as Conocimiento[];
 }
 
 // Boletines con URL firmada (bucket privado) para ver el archivo.

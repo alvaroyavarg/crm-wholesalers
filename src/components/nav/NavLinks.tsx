@@ -7,6 +7,7 @@ const enlaces = [
   { href: "/", etiqueta: "Dashboard", icono: "📊" },
   { href: "/plan", etiqueta: "Plan de venta", icono: "🎯" },
   { href: "/boletines", etiqueta: "Boletines", icono: "📰" },
+  { href: "/estrategia", etiqueta: "Estrategia", icono: "🧭" },
   { href: "/datos", etiqueta: "Datos", icono: "🗂️" },
 ];
 

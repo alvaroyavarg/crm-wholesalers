@@ -45,6 +45,16 @@ export interface Contacto {
   telefono: string | null;
 }
 
+export type TipoConocimiento = "estrategia" | "politica";
+
+export interface Conocimiento {
+  id: string;
+  tipo: TipoConocimiento;
+  titulo: string;
+  contenido: string;
+  actualizado_at: string;
+}
+
 export type OrigenBoletin = "KOA" | "KOE";
 
 export interface PromocionBoletin {
