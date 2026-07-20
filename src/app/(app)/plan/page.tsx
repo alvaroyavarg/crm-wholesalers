@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { PlanGrid } from "@/components/plan/PlanGrid";
+import { TablaPlanCartera } from "@/components/plan/TablaPlanCartera";
 import { etiquetaFY, etiquetaPeriodo } from "@/lib/fiscal";
-import { formatEUs, formatPct, pctVsLY } from "@/lib/metrics";
 import { planMatriz, serieCanal } from "@/lib/queries";
 import type { CeldaPlanRow, Segmento } from "@/lib/types";
 
@@ -126,170 +126,22 @@ export default async function PlanPage({
         </Card>
       ) : (
         <Card className="p-0">
-          <div className="border-b border-gray-100 px-5 py-4">
-            <h2 className="font-display text-base font-semibold text-gray-900">
-              Cartera completa
-            </h2>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
-                <th className="px-5 py-3 font-medium">Cliente</th>
-                <th className="px-3 py-3 text-right font-medium">
-                  {etiquetaFY(fy - 1)} real
-                </th>
-                <th className="px-3 py-3 text-right font-medium">
-                  Plan {etiquetaFY(fy)}
-                </th>
-                <th className="px-3 py-3 text-right font-medium">Δ plan vs LY</th>
-                <th className="px-3 py-3 text-right font-medium">
-                  Real YTD
-                </th>
-                <th className="px-3 py-3 text-right font-medium">
-                  Cumplimiento YTD
-                </th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((f) => {
-                const cumplimiento =
-                  f.planYtd > 0 ? (f.realYtd / f.planYtd) * 100 : null;
-                return (
-                  <tr
-                    key={f.cliente_id}
-                    className="border-b border-gray-50 transition hover:bg-gray-50/60"
-                  >
-                    <td className="px-5 py-3">
-                      <span className="font-medium text-gray-900">
-                        {f.nombre}
-                      </span>{" "}
-                      <Chip
-                        variante={f.segmento === "TOP3" ? "verde" : "azul"}
-                      >
-                        {f.segmento}
-                      </Chip>
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums text-gray-500">
-                      {formatEUs(f.lyTotal)}
-                    </td>
-                    <td className="px-3 py-3 text-right font-medium tabular-nums text-gray-900">
-                      {formatEUs(f.planTotal)}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      <Chip
-                        variante={
-                          f.planTotal - f.lyTotal >= 0 ? "verde" : "rojo"
-                        }
-                      >
-                        {formatPct(pctVsLY(f.planTotal, f.lyTotal))}
-                      </Chip>
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums text-gray-900">
-                      {formatEUs(f.realYtd)}
-                    </td>
-                    <td
-                      className={`px-3 py-3 text-right font-medium tabular-nums ${
-                        cumplimiento == null
-                          ? "text-gray-300"
-                          : cumplimiento >= 95
-                            ? "text-verde"
-                            : cumplimiento >= 80
-                              ? "text-ambar"
-                              : "text-rojo"
-                      }`}
-                    >
-                      {cumplimiento == null
-                        ? "—"
-                        : `${Math.round(cumplimiento)}%`}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <Link
-                        href={`/plan?cliente=${f.cliente_id}`}
-                        className="text-sm font-medium text-verde hover:underline"
-                      >
-                        Editar plan
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-50/60 font-semibold text-gray-900">
-                <td className="px-5 py-3">Total cartera</td>
-                <td className="px-3 py-3 text-right tabular-nums">
-                  {formatEUs(totales.ly)}
-                </td>
-                <td className="px-3 py-3 text-right tabular-nums">
-                  {formatEUs(totales.plan)}
-                </td>
-                <td className="px-3 py-3 text-right tabular-nums">
-                  {formatPct(pctVsLY(totales.plan, totales.ly))}
-                </td>
-                <td className="px-3 py-3 text-right tabular-nums">
-                  {formatEUs(totales.realYtd)}
-                </td>
-                <td className="px-3 py-3 text-right tabular-nums">
-                  {totales.planYtd > 0
-                    ? `${Math.round((totales.realYtd / totales.planYtd) * 100)}%`
-                    : "—"}
-                </td>
-                <td />
-              </tr>
-              {hayResto && (
-                <>
-                  <tr className="text-gray-500">
-                    <td className="px-5 py-3">
-                      Resto del canal (cola larga)
-                      <span className="ml-2 text-xs text-gray-400">
-                        meta = empatar LY
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {formatEUs(resto.ly)}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {formatEUs(resto.plan)}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">—</td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {formatEUs(resto.realYtd)}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {resto.planYtd > 0
-                        ? `${Math.round((resto.realYtd / resto.planYtd) * 100)}%`
-                        : "—"}
-                    </td>
-                    <td />
-                  </tr>
-                  <tr className="border-t-2 border-gray-200 bg-verde-suave/40 font-semibold text-gray-900">
-                    <td className="px-5 py-3">Total canal completo</td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {formatEUs(totales.ly + resto.ly)}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {formatEUs(totales.plan + resto.plan)}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {formatPct(
-                        pctVsLY(totales.plan + resto.plan, totales.ly + resto.ly),
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {formatEUs(canalRealYtd)}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums">
-                      {totales.planYtd + resto.planYtd > 0
-                        ? `${Math.round((canalRealYtd / (totales.planYtd + resto.planYtd)) * 100)}%`
-                        : "—"}
-                    </td>
-                    <td />
-                  </tr>
-                </>
-              )}
-            </tfoot>
-          </table>
+          <TablaPlanCartera
+            filas={filas.map((f) => ({
+              cliente_id: f.cliente_id,
+              nombre: f.nombre,
+              segmento: f.segmento,
+              lyTotal: f.lyTotal,
+              planTotal: f.planTotal,
+              realYtd: f.realYtd,
+              planYtd: f.planYtd,
+            }))}
+            fy={fy}
+            totales={totales}
+            resto={resto}
+            hayResto={hayResto}
+            canalRealYtd={canalRealYtd}
+          />
         </Card>
       )}
     </div>

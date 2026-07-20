@@ -38,6 +38,16 @@ export function TablaCartera({
     col: "ytd",
     asc: false,
   });
+  const [busqueda, setBusqueda] = useState("");
+
+  const filtradas = useMemo(() => {
+    const terminos = busqueda.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (terminos.length === 0) return filas;
+    return filas.filter((f) => {
+      const nombre = `${f.nombre} ${f.nombreCompleto}`.toLowerCase();
+      return terminos.every((t) => nombre.includes(t));
+    });
+  }, [filas, busqueda]);
 
   function ordenarPor(col: Columna) {
     setOrden((prev) =>
@@ -47,7 +57,7 @@ export function TablaCartera({
 
   const ordenadas = useMemo(() => {
     const dir = orden.asc ? 1 : -1;
-    return [...filas].sort((a, b) => {
+    return [...filtradas].sort((a, b) => {
       const va = a[orden.col];
       const vb = b[orden.col];
       if (typeof va === "string" || typeof vb === "string") {
@@ -59,7 +69,7 @@ export function TablaCartera({
       if (vb == null) return -1;
       return (Number(va) - Number(vb)) * dir;
     });
-  }, [filas, orden]);
+  }, [filtradas, orden]);
 
   const columnas: { col: Columna; etiqueta: string; alinear?: "right" }[] = [
     { col: "nombre", etiqueta: "Cliente" },
@@ -75,8 +85,31 @@ export function TablaCartera({
   ];
 
   return (
-    <table className="w-full text-sm">
-      <thead>
+    <div>
+      <div className="border-b border-gray-100 px-5 py-3">
+        <div className="relative max-w-sm">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-300">
+            🔍
+          </span>
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar cliente…"
+            className="w-full rounded-lg border border-gray-200 py-1.5 pl-9 pr-8 text-sm outline-none focus:border-verde focus:ring-2 focus:ring-verde-suave"
+          />
+          {busqueda && (
+            <button
+              onClick={() => setBusqueda("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              title="Limpiar"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+      <table className="w-full text-sm">
+        <thead>
         <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
           {columnas.map((c) => (
             <th
@@ -111,6 +144,13 @@ export function TablaCartera({
         </tr>
       </thead>
       <tbody>
+        {ordenadas.length === 0 && (
+          <tr>
+            <td colSpan={8} className="px-5 py-6 text-center text-gray-400">
+              Sin clientes que coincidan con “{busqueda}”.
+            </td>
+          </tr>
+        )}
         {ordenadas.map((c) => (
           <tr
             key={c.id}
@@ -168,6 +208,7 @@ export function TablaCartera({
           </tr>
         ))}
       </tbody>
-    </table>
+      </table>
+    </div>
   );
 }
