@@ -107,7 +107,7 @@ export default async function Dashboard({
         mesLyEus={canalMesLy}
       />
 
-      <section className="mb-6 grid grid-cols-3 gap-4">
+      <section className="mb-6 grid gap-4 md:grid-cols-3">
         <KpiCard
           icono="📦"
           etiqueta={`Volumen ${etiquetaPeriodo(periodo)} · cartera`}

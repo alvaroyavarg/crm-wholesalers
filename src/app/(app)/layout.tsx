@@ -1,4 +1,5 @@
 import { NavLinks } from "@/components/nav/NavLinks";
+import { Sidebar } from "@/components/nav/Sidebar";
 import { NotaRapida } from "@/components/notas/NotaRapida";
 import { createClient } from "@/lib/supabase/server";
 import { cerrarSesion } from "./actions";
@@ -19,8 +20,8 @@ export default async function AppLayout({
   }));
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="fixed inset-y-0 left-0 flex w-60 flex-col border-r border-gray-100 bg-white p-4">
+    <div className="min-h-screen">
+      <Sidebar>
         <div className="mb-6 flex items-center gap-3 px-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-verde font-display text-sm font-bold text-white">
             CM
@@ -43,9 +44,11 @@ export default async function AppLayout({
             <span>↩︎</span> Cerrar sesión
           </button>
         </form>
-      </aside>
+      </Sidebar>
 
-      <main className="ml-60 flex-1 p-8">{children}</main>
+      <main className="px-4 pb-24 pt-20 lg:ml-60 lg:px-8 lg:pb-8 lg:pt-8">
+        {children}
+      </main>
 
       <NotaRapida clientes={opciones} />
     </div>

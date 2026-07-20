@@ -30,7 +30,7 @@ export function GloboMes({
 
   return (
     <div className="mb-6 rounded-(--radius-card) bg-white p-6 shadow-card">
-      <div className="flex items-start justify-between gap-8">
+      <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between md:gap-8">
         <div className="min-w-0">
           <p className="text-sm text-gray-500">
             Avance del mes · <span className="font-medium text-gray-700">Canal completo</span> ·{" "}
@@ -71,7 +71,7 @@ export function GloboMes({
           </p>
         </div>
 
-        <div className="flex shrink-0 gap-8 text-right">
+        <div className="flex shrink-0 gap-8 md:text-right">
           <div>
             <p className="text-xs text-gray-400">Proyección de cierre</p>
             <p className="font-display text-xl font-semibold text-gray-900">

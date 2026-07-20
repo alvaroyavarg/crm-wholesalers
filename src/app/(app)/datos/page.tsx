@@ -34,8 +34,8 @@ export default async function DatosPage() {
         </p>
       </header>
 
-      <div className="grid grid-cols-3 gap-6">
-        <Card className="col-span-2">
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
           <h2 className="mb-4 font-display text-base font-semibold text-gray-900">
             Importar base de ventas
           </h2>

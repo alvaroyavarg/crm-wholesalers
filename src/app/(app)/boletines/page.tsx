@@ -29,8 +29,8 @@ export default async function BoletinesPage() {
         </p>
       </header>
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-6">
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
           {[
             { titulo: `Vigentes (${vigentes.length})`, items: vigentes },
             { titulo: `Vencidos y futuros (${otros.length})`, items: otros },

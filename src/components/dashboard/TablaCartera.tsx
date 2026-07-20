@@ -108,7 +108,8 @@ export function TablaCartera({
           )}
         </div>
       </div>
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[860px] text-sm">
         <thead>
         <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400">
           {columnas.map((c) => (
@@ -209,6 +210,7 @@ export function TablaCartera({
         ))}
       </tbody>
       </table>
+      </div>
     </div>
   );
 }

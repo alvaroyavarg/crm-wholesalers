@@ -75,7 +75,7 @@ export default async function FichaClientePage({
 
       {/* Header */}
       <Card className="mb-6">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="flex items-center gap-3">
               <h1 className="font-display text-2xl font-semibold text-gray-900">
@@ -120,7 +120,7 @@ export default async function FichaClientePage({
           </div>
 
           {resumen && (
-            <div className="flex gap-6 text-right">
+            <div className="flex shrink-0 gap-6 md:text-right">
               <div>
                 <p className="text-xs text-gray-400">YTD {etiquetaFY(fy)}</p>
                 <p className="font-display text-xl font-semibold text-gray-900">
@@ -149,9 +149,9 @@ export default async function FichaClientePage({
         </div>
       </Card>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Columna 1-2 */}
-        <div className="col-span-2 space-y-6">
+        <div className="space-y-6 lg:col-span-2">
           <Card>
             <h2 className="mb-4 font-display text-base font-semibold text-gray-900">
               Mix por categoría vs pares
@@ -167,7 +167,8 @@ export default async function FichaClientePage({
             <h2 className="mb-4 font-display text-base font-semibold text-gray-900">
               {etiquetaFY(fy)} vs {etiquetaFY(fy - 1)} mes a mes
             </h2>
-            <table className="w-full text-xs">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-xs">
               <thead>
                 <tr className="text-left text-gray-400">
                   <th className="py-1.5 pr-2 font-medium">FY</th>
@@ -251,6 +252,7 @@ export default async function FichaClientePage({
                 </tr>
               </tbody>
             </table>
+            </div>
             <p className="mt-2 text-[11px] text-gray-400">
               Δ %: crecimiento (verde) o caída (rojo) de {etiquetaFY(fy)} vs el
               mismo mes de {etiquetaFY(fy - 1)}
