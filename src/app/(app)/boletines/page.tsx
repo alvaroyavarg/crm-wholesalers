@@ -1,9 +1,10 @@
 import { Card } from "@/components/ui/Card";
-import { subirBoletin } from "@/app/(app)/actions";
+import { BoletinForm } from "@/components/boletines/BoletinForm";
 import { BoletinItem } from "@/components/boletines/BoletinItem";
 import { listarBoletines } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300; // análisis IA en segundo plano (after)
 
 export default async function BoletinesPage() {
   const boletines = await listarBoletines();
@@ -65,72 +66,7 @@ export default async function BoletinesPage() {
           <h2 className="mb-4 font-display text-base font-semibold text-gray-900">
             Cargar boletín
           </h2>
-          <form action={subirBoletin} className="space-y-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Título
-              </label>
-              <input
-                name="titulo"
-                required
-                placeholder="Boletín Mayoristas Centro — Jul 2026"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-verde"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Origen
-              </label>
-              <select
-                name="origen"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-verde"
-              >
-                <option value="KOA">KOA — Coca-Cola Andina</option>
-                <option value="KOE">KOE — Coca-Cola Embonor</option>
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">
-                  Vigente desde
-                </label>
-                <input
-                  name="vigente_desde"
-                  type="date"
-                  required
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-verde"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">
-                  Vigente hasta
-                </label>
-                <input
-                  name="vigente_hasta"
-                  type="date"
-                  required
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-verde"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
-                Archivo (PDF o imagen)
-              </label>
-              <input
-                name="archivo"
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.webp"
-                className="w-full text-sm text-gray-500 file:mr-3 file:rounded-lg file:border-0 file:bg-verde-suave file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-verde"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-verde px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-            >
-              Guardar boletín
-            </button>
-          </form>
+          <BoletinForm />
         </Card>
       </div>
     </div>

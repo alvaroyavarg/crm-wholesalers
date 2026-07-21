@@ -172,28 +172,39 @@ export async function eliminarContacto(formData: FormData) {
 
 // ---- Boletines ----
 
-export async function subirBoletin(formData: FormData) {
-  const titulo = String(formData.get("titulo") ?? "").trim();
-  const origen = String(formData.get("origen") ?? "KOA");
-  const vigenteDesde = String(formData.get("vigente_desde") ?? "");
-  const vigenteHasta = String(formData.get("vigente_hasta") ?? "");
-  const archivo = formData.get("archivo");
+// Paso 1: URL firmada para que el NAVEGADOR suba el archivo directo a Storage.
+// (Pasarlo por el server action chocaba con el límite de 4,5 MB de Vercel.)
+export async function prepararSubidaBoletin(nombreArchivo: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Sesión expirada. Vuelve a ingresar.");
 
-  if (!titulo || !vigenteDesde || !vigenteHasta) {
+  const extension = nombreArchivo.split(".").pop()?.toLowerCase() ?? "pdf";
+  const ruta = `${crypto.randomUUID()}.${extension}`;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage
+    .from("boletines")
+    .createSignedUploadUrl(ruta);
+  if (error) throw new Error(`prepararSubida: ${error.message}`);
+
+  return { ruta, token: data.token };
+}
+
+// Paso 2: registrar el boletín (el archivo ya está en Storage) y disparar el
+// análisis con Haiku en segundo plano.
+export async function registrarBoletin(input: {
+  titulo: string;
+  origen: string;
+  vigenteDesde: string;
+  vigenteHasta: string;
+  rutaArchivo: string | null;
+}) {
+  const titulo = input.titulo.trim();
+  if (!titulo || !input.vigenteDesde || !input.vigenteHasta) {
     throw new Error("Faltan título o fechas de vigencia");
-  }
-
-  let rutaArchivo: string | null = null;
-  if (archivo instanceof File && archivo.size > 0) {
-    const extension = archivo.name.split(".").pop()?.toLowerCase() ?? "pdf";
-    rutaArchivo = `${crypto.randomUUID()}.${extension}`;
-    const admin = createAdminClient();
-    const { error: errSubida } = await admin.storage
-      .from("boletines")
-      .upload(rutaArchivo, archivo, {
-        contentType: archivo.type || "application/octet-stream",
-      });
-    if (errSubida) throw new Error(`subirBoletin (storage): ${errSubida.message}`);
   }
 
   const supabase = await createClient();
@@ -201,27 +212,27 @@ export async function subirBoletin(formData: FormData) {
     .from("boletines")
     .insert({
       titulo,
-      origen,
+      origen: input.origen === "KOE" ? "KOE" : "KOA",
       fecha_publicacion: new Date().toISOString().slice(0, 10),
-      vigente_desde: vigenteDesde,
-      vigente_hasta: vigenteHasta,
-      archivo_url: rutaArchivo,
+      vigente_desde: input.vigenteDesde,
+      vigente_hasta: input.vigenteHasta,
+      archivo_url: input.rutaArchivo,
     })
     .select("id")
     .single();
-  if (error) throw new Error(`subirBoletin: ${error.message}`);
+  if (error) throw new Error(`registrarBoletin: ${error.message}`);
 
-  // Análisis automático con Haiku (best-effort: si falla, el boletín queda
-  // guardado igual y se puede re-analizar desde el botón).
-  if (rutaArchivo && nuevo) {
-    try {
-      await ejecutarAnalisisBoletin(nuevo.id as string);
-    } catch (e) {
-      console.error("análisis automático falló:", e);
-    }
+  // Análisis con IA DESPUÉS de responder (no bloquea el guardado)
+  if (input.rutaArchivo && nuevo) {
+    after(async () => {
+      await ejecutarAnalisisBoletin(nuevo.id as string).catch((e) =>
+        console.error("análisis automático falló:", e),
+      );
+    });
   }
 
   revalidatePath("/boletines");
+  return { ok: true, analizando: Boolean(input.rutaArchivo) };
 }
 
 // Analiza (o re-analiza) un boletín ya guardado con Haiku.
