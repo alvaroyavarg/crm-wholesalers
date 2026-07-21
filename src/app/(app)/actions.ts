@@ -125,12 +125,16 @@ export async function cambiarEstadoRecomendacion(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const estado = String(formData.get("estado") ?? "");
   const clienteId = String(formData.get("cliente_id") ?? "");
+  const motivo = String(formData.get("motivo") ?? "").trim();
   if (!id || !["aceptada", "descartada"].includes(estado)) return;
+
+  const cambios: Record<string, unknown> = { estado };
+  if (estado === "descartada" && motivo) cambios.motivo_descarte = motivo;
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("recomendaciones")
-    .update({ estado })
+    .update(cambios)
     .eq("id", id);
   if (error) throw new Error(`cambiarEstadoRecomendacion: ${error.message}`);
 

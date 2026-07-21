@@ -171,6 +171,15 @@ async function getResumenCartera(supabase: SupabaseClient) {
   });
   if (error) return { error: error.message };
 
+  // bottler por cliente (el RPC no lo trae)
+  const { data: bottlers } = await supabase
+    .from("clientes")
+    .select("id, bottler")
+    .eq("activo", true);
+  const bottlerDe = new Map(
+    (bottlers ?? []).map((b) => [b.id as string, b.bottler as string | null]),
+  );
+
   interface Fila {
     cliente_id: string;
     nombre: string;
@@ -203,6 +212,7 @@ async function getResumenCartera(supabase: SupabaseClient) {
       cliente_id: c.cliente_id,
       nombre: c.nombre_corto ?? c.nombre,
       segmento: c.segmento,
+      bottler: bottlerDe.get(c.cliente_id) ?? null,
       ytd_eus: r0(Number(c.ytd_eus)),
       ytd_ly_eus: r0(Number(c.ytd_ly_eus)),
       ytd_vs_ly_pct: pct(Number(c.ytd_eus), Number(c.ytd_ly_eus)),
@@ -291,7 +301,7 @@ async function getVentasCliente(supabase: SupabaseClient, clienteId: string) {
 async function compararConPares(supabase: SupabaseClient, clienteId: string) {
   const { data: cli } = await supabase
     .from("clientes")
-    .select("segmento, nombre, nombre_corto")
+    .select("segmento, nombre, nombre_corto, bottler")
     .eq("id", clienteId)
     .single();
   const esTop3 = cli?.segmento === "TOP3";
@@ -334,6 +344,7 @@ async function compararConPares(supabase: SupabaseClient, clienteId: string) {
 
   return {
     cliente: cli?.nombre_corto ?? cli?.nombre,
+    bottler: cli?.bottler ?? null,
     benchmark: esTop3 ? "canal completo" : "segmento CLAVE",
     gaps_categoria: gapsCategoria,
     sku_oportunidad_no_compra: oportunidades,
