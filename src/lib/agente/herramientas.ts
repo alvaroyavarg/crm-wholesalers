@@ -14,6 +14,12 @@ const pct = (a: number, b: number) => (b ? r1(((a - b) / b) * 100) : null);
 // ---- Esquemas para la API de Anthropic ----
 export const TOOLS: Anthropic.Tool[] = [
   {
+    name: "get_resumen_cartera",
+    description:
+      "Vista panorámica de TODA la cartera activa (~24 cuentas): por cliente, YTD vs LY, mes en curso (MTD) vs mismo mes LY, plan del mes, días de inventario, crédito disponible, señales de oportunidad y última visita. Úsala SIEMPRE que la pregunta sea sobre varias cuentas ('qué clientes…', 'quién tiene espacio…', 'dónde hay oportunidades…') y después profundiza cliente a cliente.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
     name: "get_ventas_cliente",
     description:
       "Serie de ventas del cliente (EUs) del año fiscal actual vs el anterior: YTD, vs LY, desglose por categoría con su variación, y los SKU que más crecen o caen. Úsalo para entender cómo viene comprando.",
@@ -134,6 +140,8 @@ export async function ejecutarHerramienta(
   input: Input,
 ): Promise<unknown> {
   switch (nombre) {
+    case "get_resumen_cartera":
+      return getResumenCartera(supabase);
     case "get_ventas_cliente":
       return getVentasCliente(supabase, String(input.cliente_id));
     case "comparar_con_pares":
@@ -153,6 +161,67 @@ export async function ejecutarHerramienta(
     default:
       return { error: `Herramienta desconocida: ${nombre}` };
   }
+}
+
+async function getResumenCartera(supabase: SupabaseClient) {
+  const { fy, periodo } = fiscalActual();
+  const { data, error } = await supabase.rpc("resumen_cartera", {
+    p_fy: fy,
+    p_periodo: periodo,
+  });
+  if (error) return { error: error.message };
+
+  interface Fila {
+    cliente_id: string;
+    nombre: string;
+    nombre_corto: string | null;
+    segmento: string;
+    ytd_eus: number;
+    ytd_ly_eus: number;
+    mes_eus: number;
+    mes_ly_eus: number;
+    plan_mes_eus: number;
+    fy_ly_eus: number;
+    dias_inventario: number | null;
+    credito_disponible: number | null;
+    ultima_visita: string | null;
+  }
+
+  const clientes = ((data ?? []) as Fila[]).map((c) => {
+    const senales: string[] = [];
+    const gap = Number(c.ytd_ly_eus) - Number(c.ytd_eus);
+    if (Number(c.ytd_ly_eus) > 0 && gap / Number(c.ytd_ly_eus) > 0.05) {
+      senales.push(`gap vs LY de ${r0(gap)} EUs`);
+    }
+    if (c.dias_inventario != null && Number(c.dias_inventario) < 30) {
+      senales.push(`inventario bajo (${r0(Number(c.dias_inventario))} días)`);
+    }
+    if (c.credito_disponible != null && Number(c.credito_disponible) > 0) {
+      senales.push(`crédito disponible ($${r0(Number(c.credito_disponible)).toLocaleString("es-CL")})`);
+    }
+    return {
+      cliente_id: c.cliente_id,
+      nombre: c.nombre_corto ?? c.nombre,
+      segmento: c.segmento,
+      ytd_eus: r0(Number(c.ytd_eus)),
+      ytd_ly_eus: r0(Number(c.ytd_ly_eus)),
+      ytd_vs_ly_pct: pct(Number(c.ytd_eus), Number(c.ytd_ly_eus)),
+      mtd_eus: r0(Number(c.mes_eus)),
+      mismo_mes_ly_eus: r0(Number(c.mes_ly_eus)),
+      plan_mes_eus: r0(Number(c.plan_mes_eus)),
+      fy_ly_total_eus: r0(Number(c.fy_ly_eus)),
+      dias_inventario: c.dias_inventario != null ? r0(Number(c.dias_inventario)) : null,
+      credito_disponible: c.credito_disponible != null ? r0(Number(c.credito_disponible)) : null,
+      ultima_visita: c.ultima_visita?.slice(0, 10) ?? null,
+      senales,
+    };
+  });
+
+  return {
+    fy,
+    periodo_actual: `P${periodo} (${mesDePeriodo(periodo)})`,
+    clientes,
+  };
 }
 
 async function getVentasCliente(supabase: SupabaseClient, clienteId: string) {
@@ -206,6 +275,13 @@ async function getVentasCliente(supabase: SupabaseClient, clienteId: string) {
     ytd_eus: r0(ytd),
     ytd_ly_eus: r0(ytdLy),
     ytd_vs_ly_pct: pct(ytd, ytdLy),
+    // Serie P1..P12: eus del FY actual y del FY anterior (mismo período).
+    // Ej: para ver "P12 (junio) del año pasado", mirar eus_ly en periodo 12.
+    serie_mensual: serie.map((s) => ({
+      periodo: s.periodo,
+      eus: r0(Number(s.eus_actual)),
+      eus_ly: r0(Number(s.eus_ly)),
+    })),
     categorias,
     sku_cayendo: cayendo,
     sku_creciendo: creciendo,
