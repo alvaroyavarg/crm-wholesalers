@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { analizarBoletin as analizarBoletinIA } from "@/lib/boletines/analizar";
@@ -57,14 +58,28 @@ export async function crearNota(input: {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("notas").insert({
-    cliente_id: input.clienteId,
-    tipo,
-    contenido_raw: contenido,
-    creado_por_agente: false,
-    // contenido_estructurado: lo completa el agente en la Fase 3
-  });
+  const { data: nueva, error } = await supabase
+    .from("notas")
+    .insert({
+      cliente_id: input.clienteId,
+      tipo,
+      contenido_raw: contenido,
+      creado_por_agente: false,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(`crearNota: ${error.message}`);
+
+  // Post-proceso con Haiku DESPUÉS de responder: estructura la nota
+  // (acuerdos/rechazos/próximos pasos) y actualiza el perfil si corresponde.
+  if (nueva) {
+    after(async () => {
+      const { estructurarNota } = await import("@/lib/notas/estructurar");
+      await estructurarNota(nueva.id as string).catch((e) =>
+        console.error("estructurarNota:", e),
+      );
+    });
+  }
 
   revalidatePath("/");
   revalidatePath(`/clientes/${input.clienteId}`);

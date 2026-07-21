@@ -47,13 +47,20 @@ export function FeedRecomendaciones({
           )}
           <p className="mt-1 text-sm text-gray-800">{r.texto}</p>
 
-          <div className="mt-2 flex flex-wrap gap-1">
+          <ul className="mt-3 space-y-1.5">
             {r.evidencia.map((e, i) => (
-              <Chip key={i} variante={VARIANTE[e.tipo] ?? "gris"} title={e.detalle}>
-                {ETIQUETA[e.tipo] ?? e.tipo}: {e.detalle}
-              </Chip>
+              <li key={i} className="flex items-start gap-2">
+                <span className="shrink-0">
+                  <Chip variante={VARIANTE[e.tipo] ?? "gris"}>
+                    {ETIQUETA[e.tipo] ?? e.tipo}
+                  </Chip>
+                </span>
+                <span className="min-w-0 text-xs leading-snug text-gray-500">
+                  {e.detalle}
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
 
           <div className="mt-3 flex gap-2">
             <form action={cambiarEstadoRecomendacion}>

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { correrAgente, type MensajeChat } from "@/lib/agente/loop";
 
-export const maxDuration = 60;
+// El loop del agente puede tomar varios minutos (hasta 8 llamadas al modelo)
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   const supabase = await createClient();

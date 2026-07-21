@@ -70,8 +70,20 @@ export function Chat({ preguntaInicial = "" }: { preguntaInicial?: string }) {
           mensajes: nuevos.map((m) => ({ role: m.role, content: m.content })),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Error del copiloto");
+      // La respuesta puede no ser JSON (timeout / error de la plataforma)
+      const crudo = await res.text();
+      let data: { texto?: string; herramientas?: { nombre: string }[]; error?: string };
+      try {
+        data = JSON.parse(crudo);
+      } catch {
+        throw new Error(
+          res.ok
+            ? "Respuesta inválida del servidor. Intenta de nuevo."
+            : `El análisis tardó demasiado o falló (HTTP ${res.status}). Prueba con una pregunta más acotada o reintenta.`,
+        );
+      }
+      if (!res.ok || !data.texto)
+        throw new Error(data.error ?? "Error del copiloto");
 
       const herramientas = [
         ...new Set(

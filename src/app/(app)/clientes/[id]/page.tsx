@@ -19,7 +19,7 @@ import { fichaCliente } from "@/lib/queries";
 import type { TipoNota } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // generar recomendaciones corre el loop del agente
+export const maxDuration = 300; // generar recomendaciones corre el loop del agente
 
 const iconoNota: Record<TipoNota, string> = {
   visita: "🚗",
@@ -314,7 +314,7 @@ export default async function FichaClientePage({
                 {notas.map((n) => (
                   <li key={n.id} className="flex gap-3">
                     <span className="mt-0.5">{iconoNota[n.tipo]}</span>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-gray-400">
                         {formatFecha(n.fecha)} ·{" "}
                         <span className="capitalize">{n.tipo}</span>
@@ -323,6 +323,31 @@ export default async function FichaClientePage({
                       <p className="mt-0.5 text-sm leading-snug text-gray-700">
                         {n.contenido_raw}
                       </p>
+                      {n.contenido_estructurado && (
+                        <div className="mt-1.5 space-y-1">
+                          {(n.contenido_estructurado.acuerdos ?? []).map(
+                            (a, i) => (
+                              <p key={`a${i}`} className="text-xs text-verde">
+                                🤝 {a}
+                              </p>
+                            ),
+                          )}
+                          {(n.contenido_estructurado.rechazos ?? []).map(
+                            (r, i) => (
+                              <p key={`r${i}`} className="text-xs text-rojo">
+                                🚫 {r}
+                              </p>
+                            ),
+                          )}
+                          {(n.contenido_estructurado.proximos_pasos ?? []).map(
+                            (p, i) => (
+                              <p key={`p${i}`} className="text-xs text-azul">
+                                → {p}
+                              </p>
+                            ),
+                          )}
+                        </div>
+                      )}
                     </div>
                   </li>
                 ))}

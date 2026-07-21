@@ -85,7 +85,9 @@ export async function fichaCliente(id: string, fyDetalleParam?: number) {
       supabase.from("perfiles").select("*").eq("cliente_id", id).maybeSingle(),
       supabase
         .from("notas")
-        .select("id, cliente_id, fecha, tipo, contenido_raw, creado_por_agente")
+        .select(
+          "id, cliente_id, fecha, tipo, contenido_raw, contenido_estructurado, creado_por_agente",
+        )
         .eq("cliente_id", id)
         .order("fecha", { ascending: false })
         .limit(10),

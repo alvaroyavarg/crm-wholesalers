@@ -150,12 +150,20 @@ export interface Recomendacion {
   cliente_nombre?: string;
 }
 
+export interface EstructuraNota {
+  resumen?: string;
+  acuerdos?: string[];
+  rechazos?: string[];
+  proximos_pasos?: string[];
+}
+
 export interface Nota {
   id: string;
   cliente_id: string;
   fecha: string;
   tipo: TipoNota;
   contenido_raw: string;
+  contenido_estructurado: EstructuraNota | null;
   creado_por_agente: boolean;
 }
 
