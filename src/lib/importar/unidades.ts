@@ -32,14 +32,26 @@ function normalizar(texto: string): string {
 }
 
 /**
- * Smirnoff Ice, en cualquiera de las formas en que lo nombran los bottlers
- * ("SMIRNOFF ICE", "Smirnoff Ice Original", "SMIRNOFF-ICE 275ML"…).
- * Se busca en la concatenación de marca y variante porque cada archivo parte
- * el nombre del producto de manera distinta.
+ * Smirnoff Ice, en cualquiera de las formas en que lo nombran los bottlers.
+ * No alcanza con buscar "smirnoff ice": cada uno abrevia distinto y en la
+ * data real esa forma completa aparece en 1 de cada 430 filas.
+ *
+ *   Andina  → "VODKA SMIR. ICE ORIGINAL LT355CC"   (marca abreviada)
+ *   Embonor → "SMICE G APPLE 355X6"                (todo contraído, y con
+ *                                                   `Marca SKU` vacío)
+ *
+ * Debe seguir devolviendo false para el vodka Smirnoff, que no lleva el
+ * divisor: "SMIRNOFF 21", "SMIR BITE CIT", "VODKA SMIRNOFF RED".
+ *
+ * Se busca sobre la concatenación de todas las partes del nombre porque cada
+ * archivo lo reparte en columnas distintas.
  */
 export function esSmirnoffIce(...partesDelNombre: string[]): boolean {
   const t = normalizar(partesDelNombre.join(" "));
-  return t.includes("smirnoff") && /\bice\b/.test(t);
+  // "SMICE" y variantes contraídas
+  if (/\bsmice/.test(t)) return true;
+  // "smirnoff ice", "smir. ice": marca abreviada + "ice" como palabra
+  return /smir/.test(t) && /\bice\b/.test(t);
 }
 
 /**

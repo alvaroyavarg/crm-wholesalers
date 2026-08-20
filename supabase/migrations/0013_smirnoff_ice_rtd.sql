@@ -8,11 +8,17 @@
 -- mismo producto queda partida en dos categorías. RTD mostraría crecimiento
 -- infinito (sin base LY) y Vodka una caída que no ocurrió.
 
+-- El patrón cubre las abreviaturas reales de los bottlers: Andina escribe
+-- "SMIR. ICE" y Embonor "SMICE". Buscar solo "smirnoff ice" deja fuera la
+-- práctica totalidad de las filas.
+-- No debe alcanzar al vodka: "SMIRNOFF 21", "SMIR BITE CIT", "SMIRNOFF RED".
 update ventas
 set    categoria = 'RTD'
 where  categoria <> 'RTD'
-  and  marca ilike '%smirnoff%'
-  and  marca ~* '(^|[^a-z])ice([^a-z]|$)';
+  and  (
+        marca ~* '(^|[^a-z])smice'
+        or (marca ~* 'smir' and marca ~* '(^|[^a-z])ice([^a-z]|$)')
+       );
 
 -- Verificación
 -- select categoria, count(*), round(sum(eus)) as eus
