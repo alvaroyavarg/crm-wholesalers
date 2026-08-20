@@ -1,4 +1,8 @@
+import { esSmirnoffIce } from "./unidades";
+
 // Mapeo marca (L3) + variante (L5) → categoría del negocio.
+// Smirnoff Ice es RTD, no Vodka: es la línea que el negocio mide aparte
+// (y la única con divisor propio al convertir UC → EU).
 // Segmentación whisky definida por el usuario:
 //   Primary: Sandy Mac, Vat 69, White Horse, J&B, Bell's
 //   Estándar: JW Red
@@ -28,6 +32,8 @@ const POR_MARCA: Record<string, string> = {
 };
 
 export function categoriaDe(marcaL3: string, varianteL5: string): string {
+  if (esSmirnoffIce(marcaL3, varianteL5)) return "RTD";
+
   if (marcaL3 === "Johnnie Walker") {
     const v = varianteL5.toLowerCase();
     if (v.includes("red")) return "Whisky Estándar";
