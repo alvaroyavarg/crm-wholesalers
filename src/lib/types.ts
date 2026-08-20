@@ -178,3 +178,46 @@ export interface Perfil {
   resumen: string | null;
   actualizado_at: string;
 }
+
+// ---- MTD (mes en curso) ----
+
+export type OrigenImportacion = "DIAGEO" | "KOA" | "KOE";
+
+export interface Importacion {
+  id: string;
+  origen: OrigenImportacion;
+  anio_fiscal: number;
+  periodo: number;
+  fecha_corte: string;
+  filas: number;
+  eus: number;
+  archivo: string | null;
+  creado_at: string;
+}
+
+// Fila del RPC mtd_cartera
+export interface MtdClienteRow {
+  cliente_id: string;
+  nombre: string;
+  nombre_corto: string | null;
+  segmento: Segmento;
+  bottler: string | null;
+  mtd_eus: number;
+  mtd_ly_eus: number;
+  plan_mes_eus: number;
+  mtd_koa: number;
+  mtd_koe: number;
+}
+
+export interface MtdCategoriaRow {
+  categoria: string;
+  eus: number;
+  eus_ly: number;
+}
+
+export interface MtdBottlerRow {
+  bottler: string;
+  eus: number;
+  eus_ly: number;
+  clientes: number;
+}

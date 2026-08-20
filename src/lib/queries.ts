@@ -7,9 +7,13 @@ import type {
   Cliente,
   Conocimiento,
   Contacto,
+  Importacion,
   ItemDetalle,
   MixCategoriaRow,
   MixSkuRow,
+  MtdBottlerRow,
+  MtdCategoriaRow,
+  MtdClienteRow,
   Nota,
   Perfil,
   Recomendacion,
@@ -235,4 +239,44 @@ export async function planMatriz() {
   if (error) throw new Error(`plan_matriz: ${error.message}`);
 
   return { fy, periodo, celdas: (data ?? []) as CeldaPlanRow[] };
+}
+
+// ---- MTD (mes en curso) ----
+
+// Todo lo del mes en una sola pasada: cartera, desgloses y fecha de corte.
+// La fecha de corte viene de la tabla `importaciones` y es la que manda para
+// calcular el ritmo — no la fecha de hoy.
+export async function mtdCompleto() {
+  const supabase = await createClient();
+  const { fy, periodo } = fiscalActual();
+  const params = { p_fy: fy, p_periodo: periodo };
+
+  const [cartera, categorias, bottlers, corte, cargas] = await Promise.all([
+    supabase.rpc("mtd_cartera", params),
+    supabase.rpc("mtd_categorias", params),
+    supabase.rpc("mtd_bottlers", params),
+    supabase.rpc("fecha_corte_periodo", params),
+    supabase
+      .from("importaciones")
+      .select("*")
+      .eq("anio_fiscal", fy)
+      .eq("periodo", periodo)
+      .order("creado_at", { ascending: false }),
+  ]);
+
+  if (cartera.error) throw new Error(`mtd_cartera: ${cartera.error.message}`);
+  if (categorias.error) throw new Error(`mtd_categorias: ${categorias.error.message}`);
+  if (bottlers.error) throw new Error(`mtd_bottlers: ${bottlers.error.message}`);
+  if (corte.error) throw new Error(`fecha_corte_periodo: ${corte.error.message}`);
+  if (cargas.error) throw new Error(`importaciones: ${cargas.error.message}`);
+
+  return {
+    fy,
+    periodo,
+    fechaCorte: (corte.data as string | null) ?? null,
+    clientes: (cartera.data ?? []) as MtdClienteRow[],
+    categorias: (categorias.data ?? []) as MtdCategoriaRow[],
+    bottlers: (bottlers.data ?? []) as MtdBottlerRow[],
+    cargas: (cargas.data ?? []) as Importacion[],
+  };
 }

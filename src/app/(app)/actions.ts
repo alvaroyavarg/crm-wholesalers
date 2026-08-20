@@ -316,3 +316,38 @@ export async function eliminarBoletin(formData: FormData) {
 
   revalidatePath("/boletines");
 }
+
+// ---- Meta del mes (edición rápida desde MTD) ----
+
+// Edita un solo período del plan. `guardarPlan` reescribe los 12 de una vez;
+// desde MTD se ajusta la meta del mes en curso sin tocar el resto del año.
+export async function guardarMetaMes(formData: FormData) {
+  const clienteId = String(formData.get("clienteId") ?? "");
+  const anioFiscal = Number(formData.get("anioFiscal"));
+  const periodo = Number(formData.get("periodo"));
+  const eus = Number(String(formData.get("eus") ?? "").replace(",", "."));
+
+  if (!clienteId) throw new Error("Falta el cliente");
+  if (!Number.isInteger(anioFiscal)) throw new Error("Año fiscal inválido");
+  if (!Number.isInteger(periodo) || periodo < 1 || periodo > 12) {
+    throw new Error("Período inválido");
+  }
+  if (!Number.isFinite(eus) || eus < 0) throw new Error("Meta inválida");
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("plan_ventas").upsert(
+    {
+      cliente_id: clienteId,
+      anio_fiscal: anioFiscal,
+      periodo,
+      eus_plan: eus,
+      actualizado_at: new Date().toISOString(),
+    },
+    { onConflict: "cliente_id,anio_fiscal,periodo" },
+  );
+  if (error) throw new Error(`guardarMetaMes: ${error.message}`);
+
+  revalidatePath("/mtd");
+  revalidatePath("/plan");
+  revalidatePath("/");
+}
