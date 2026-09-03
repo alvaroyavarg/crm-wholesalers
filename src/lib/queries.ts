@@ -293,10 +293,11 @@ export async function metaProximoMes(fyParam?: number, periodoParam?: number) {
   const supabase = await createClient();
   const { fy, periodo } = fiscalActual();
 
+  // Por defecto, el mes actual (no "el siguiente"): a comienzos de mes se
+  // suele seguir fijando la meta del mes que recién empieza. Para planificar
+  // con anticipación está el selector de mes en la página.
   const meta =
-    fyParam != null && periodoParam != null
-      ? { fy: fyParam, periodo: periodoParam }
-      : sumarPeriodos(fy, periodo, 1);
+    fyParam != null && periodoParam != null ? { fy: fyParam, periodo: periodoParam } : { fy, periodo };
 
   const colA = sumarPeriodos(meta.fy, meta.periodo, -2);
   const colB = sumarPeriodos(meta.fy, meta.periodo, -1);

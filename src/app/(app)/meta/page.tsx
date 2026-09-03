@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { TablaMetaProximoMes } from "@/components/meta/TablaMetaProximoMes";
-import { etiquetaMesCalendario, sumarPeriodos } from "@/lib/fiscal";
+import { etiquetaMesCalendario, fiscalActual, sumarPeriodos } from "@/lib/fiscal";
 import { formatEUs } from "@/lib/metrics";
 import { metaProximoMes } from "@/lib/queries";
 
@@ -29,6 +29,14 @@ export default async function MetaPage({
 
   const mesAnterior = sumarPeriodos(fyMeta, periodoMeta, -1);
   const mesSiguiente = sumarPeriodos(fyMeta, periodoMeta, 1);
+
+  // Selector directo: no depende de ir clickeando ← → desde "hoy". La
+  // ventana se ancla a HOY (no al mes que se está viendo) para que no se
+  // corra cada vez que se navega.
+  const { fy: fyHoy, periodo: periodoHoy } = fiscalActual();
+  const ventanaMeses = Array.from({ length: 6 }, (_, i) =>
+    sumarPeriodos(fyHoy, periodoHoy, i - 1),
+  );
 
   const etiquetas = {
     a: etiquetaMesCalendario(columnas.a.fy, columnas.a.periodo),
@@ -59,15 +67,35 @@ export default async function MetaPage({
         <div className="flex items-center gap-2">
           <Link
             href={hrefMes(mesAnterior.fy, mesAnterior.periodo)}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            title="Mes anterior"
+            className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm text-gray-500 hover:bg-gray-50"
           >
-            ← {etiquetaMesCalendario(mesAnterior.fy, mesAnterior.periodo)}
+            ←
           </Link>
+          <div className="flex overflow-hidden rounded-lg border border-gray-200">
+            {ventanaMeses.map((m) => {
+              const activo = m.fy === fyMeta && m.periodo === periodoMeta;
+              return (
+                <Link
+                  key={`${m.fy}-${m.periodo}`}
+                  href={hrefMes(m.fy, m.periodo)}
+                  className={`border-r border-gray-200 px-3 py-1.5 text-sm last:border-r-0 ${
+                    activo
+                      ? "bg-verde text-white"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {etiquetaMesCalendario(m.fy, m.periodo)}
+                </Link>
+              );
+            })}
+          </div>
           <Link
             href={hrefMes(mesSiguiente.fy, mesSiguiente.periodo)}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            title="Mes siguiente"
+            className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm text-gray-500 hover:bg-gray-50"
           >
-            {etiquetaMesCalendario(mesSiguiente.fy, mesSiguiente.periodo)} →
+            →
           </Link>
         </div>
       </div>
