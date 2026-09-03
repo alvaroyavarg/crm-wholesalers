@@ -30,6 +30,10 @@ interface EdicionMeta {
   uc: string;
 }
 
+function etiquetaBottler(b: string | null): string {
+  return b === "KOA" ? "Andina" : b === "KOE" ? "Embonor" : "—";
+}
+
 function eusAUc(eus: number): string {
   return (eus / FACTOR_UC_EU).toFixed(1);
 }
@@ -156,6 +160,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
           <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
             <th className="w-8 px-2 py-3" />
             <th className="px-3 py-3 font-medium">ID cliente</th>
+            <th className="px-3 py-3 font-medium">Distribuidor</th>
             {columnas.map((c) => (
               <th
                 key={c.col}
@@ -209,6 +214,14 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                       </span>
                     )}
                   </td>
+                  <td className="px-3 py-3 text-gray-600">
+                    {etiquetaBottler(f.bottler)}
+                    {f.es_frontera && (
+                      <span className="ml-1.5 align-middle">
+                        <Chip variante="ambar">frontera</Chip>
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_a)}</td>
                   <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_b)}</td>
                   <td className="px-3 py-3 text-right text-gray-500">{formatEUs(f.eus_c)}</td>
@@ -240,7 +253,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
 
                 {abierto && (
                   <tr className="bg-gray-50/60">
-                    <td colSpan={8} className="px-5 py-3">
+                    <td colSpan={9} className="px-5 py-3">
                       {items === "cargando" || items === undefined ? (
                         <p className="text-xs text-gray-400">Cargando compra por SKU…</p>
                       ) : items.length === 0 ? (

@@ -130,11 +130,19 @@ export default async function MetaPage({
               clic en el nombre o la flecha para ver la compra por SKU
             </span>
           </p>
-          {sinMeta > 0 && (
-            <Chip variante="ambar">
-              {sinMeta} {sinMeta === 1 ? "cuenta sin meta" : "cuentas sin meta"}
-            </Chip>
-          )}
+          <div className="flex items-center gap-2">
+            {sinMeta > 0 && (
+              <Chip variante="ambar">
+                {sinMeta} {sinMeta === 1 ? "cuenta sin meta" : "cuentas sin meta"}
+              </Chip>
+            )}
+            <a
+              href={`/api/meta/exportar?fy=${fyMeta}&periodo=${periodoMeta}`}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+            >
+              ⬇️ Exportar a Excel
+            </a>
+          </div>
         </div>
         <div className="mt-3">
           <TablaMetaProximoMes

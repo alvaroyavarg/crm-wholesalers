@@ -231,13 +231,15 @@ export interface MetaClienteRow {
   nombre_corto: string | null;
   segmento: Segmento;
   cod_diageo: string | null;
+  bottler: string | null;
+  es_frontera: boolean;
   eus_a: number;
   eus_b: number;
   eus_c: number;
   meta_eus: number;
 }
 
-// Item del RPC detalle_meta_cliente (drill-down por SKU)
+// Item del RPC detalle_meta_cliente (drill-down por SKU, un cliente)
 export interface DetalleMetaItem {
   categoria: string;
   marca: string;
@@ -245,4 +247,11 @@ export interface DetalleMetaItem {
   eus_a: number;
   eus_b: number;
   eus_c: number;
+}
+
+// Fila del RPC detalle_meta_todos (para exportar a Excel: toda la cartera)
+export interface DetalleMetaTodosRow extends DetalleMetaItem {
+  cliente_id: string;
+  nombre_corto: string | null;
+  nombre: string;
 }

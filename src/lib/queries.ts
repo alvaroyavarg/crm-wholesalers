@@ -8,6 +8,7 @@ import type {
   Conocimiento,
   Contacto,
   DetalleMetaItem,
+  DetalleMetaTodosRow,
   Importacion,
   ItemDetalle,
   MetaClienteRow,
@@ -321,4 +322,25 @@ export async function metaProximoMes(fyParam?: number, periodoParam?: number) {
     columnas: { a: colA, b: colB, c: colC },
     clientes: (data ?? []) as MetaClienteRow[],
   };
+}
+
+// Detalle por SKU de TODA la cartera para los mismos 3 períodos de
+// metaProximoMes — usado por el export a Excel (una sola pasada, no una
+// llamada por cliente).
+export async function detalleMetaTodos(
+  colA: { fy: number; periodo: number },
+  colB: { fy: number; periodo: number },
+  colC: { fy: number; periodo: number },
+) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("detalle_meta_todos", {
+    p_fy_a: colA.fy,
+    p_periodo_a: colA.periodo,
+    p_fy_b: colB.fy,
+    p_periodo_b: colB.periodo,
+    p_fy_c: colC.fy,
+    p_periodo_c: colC.periodo,
+  });
+  if (error) throw new Error(`detalle_meta_todos: ${error.message}`);
+  return (data ?? []) as DetalleMetaTodosRow[];
 }
