@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { analizarBoletin as analizarBoletinIA } from "@/lib/boletines/analizar";
+import type { DetalleMetaItem } from "@/lib/types";
 
 export async function cerrarSesion() {
   const supabase = await createClient();
@@ -348,6 +349,32 @@ export async function guardarMetaMes(formData: FormData) {
   if (error) throw new Error(`guardarMetaMes: ${error.message}`);
 
   revalidatePath("/mtd");
+  revalidatePath("/meta");
   revalidatePath("/plan");
   revalidatePath("/");
+}
+
+// ---- Detalle por SKU para la tabla de meta (drill-down) ----
+
+export async function obtenerDetalleMeta(
+  clienteId: string,
+  fyA: number,
+  periodoA: number,
+  fyB: number,
+  periodoB: number,
+  fyC: number,
+  periodoC: number,
+) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("detalle_meta_cliente", {
+    p_cliente: clienteId,
+    p_fy_a: fyA,
+    p_periodo_a: periodoA,
+    p_fy_b: fyB,
+    p_periodo_b: periodoB,
+    p_fy_c: fyC,
+    p_periodo_c: periodoC,
+  });
+  if (error) throw new Error(`detalle_meta_cliente: ${error.message}`);
+  return (data ?? []) as DetalleMetaItem[];
 }

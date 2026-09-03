@@ -47,3 +47,30 @@ export function quarterDe(p: number): number {
 export function halfDe(p: number): number {
   return p <= 6 ? 1 : 2;
 }
+
+// ---- Aritmética de períodos ----
+
+/** Desplaza (fy, periodo) por `delta` períodos, cruzando el límite de FY. */
+export function sumarPeriodos(
+  fy: number,
+  periodo: number,
+  delta: number,
+): PuntoFiscal {
+  const n = fy * 12 + (periodo - 1) + delta;
+  return { fy: Math.floor(n / 12), periodo: (n % 12) + 1 };
+}
+
+// Meses del calendario para etiquetas tipo "jul-26" (no confundir con
+// MESES_P, que está ordenado por período fiscal P1..P12).
+const MESES_CALENDARIO = [
+  "ene", "feb", "mar", "abr", "may", "jun",
+  "jul", "ago", "sept", "oct", "nov", "dic",
+];
+
+/** Etiqueta de mes calendario + año corto, ej. "jul-26", "sept-25". */
+export function etiquetaMesCalendario(fy: number, periodo: number): string {
+  const fecha = inicioPeriodo(fy, periodo);
+  const mes = MESES_CALENDARIO[fecha.getMonth()];
+  const anio = String(fecha.getFullYear()).slice(-2);
+  return `${mes}-${anio}`;
+}

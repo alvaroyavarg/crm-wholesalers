@@ -221,3 +221,28 @@ export interface MtdBottlerRow {
   eus_ly: number;
   clientes: number;
 }
+
+// ---- Meta del próximo mes ----
+
+// Fila del RPC resumen_meta_periodo
+export interface MetaClienteRow {
+  cliente_id: string;
+  nombre: string;
+  nombre_corto: string | null;
+  segmento: Segmento;
+  cod_diageo: string | null;
+  eus_a: number;
+  eus_b: number;
+  eus_c: number;
+  meta_eus: number;
+}
+
+// Item del RPC detalle_meta_cliente (drill-down por SKU)
+export interface DetalleMetaItem {
+  categoria: string;
+  marca: string;
+  formato: string;
+  eus_a: number;
+  eus_b: number;
+  eus_c: number;
+}

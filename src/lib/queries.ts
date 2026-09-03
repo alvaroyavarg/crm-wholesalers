@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { aFiscal, fiscalActual } from "./fiscal";
+import { aFiscal, fiscalActual, sumarPeriodos } from "./fiscal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   Boletin,
@@ -7,8 +7,10 @@ import type {
   Cliente,
   Conocimiento,
   Contacto,
+  DetalleMetaItem,
   Importacion,
   ItemDetalle,
+  MetaClienteRow,
   MixCategoriaRow,
   MixSkuRow,
   MtdBottlerRow,
@@ -278,5 +280,44 @@ export async function mtdCompleto() {
     categorias: (categorias.data ?? []) as MtdCategoriaRow[],
     bottlers: (bottlers.data ?? []) as MtdBottlerRow[],
     cargas: (cargas.data ?? []) as Importacion[],
+  };
+}
+
+// ---- Meta del próximo mes ----
+
+// Tabla de trabajo para fijar la meta de un mes: por defecto el que sigue al
+// actual (hoy Ago-26 → propone Sept-26), con 2 columnas de tendencia
+// reciente (los 2 meses anteriores al objetivo) + el mismo mes LY.
+// fyParam/periodoParam permiten navegar a otro mes objetivo (prev/next).
+export async function metaProximoMes(fyParam?: number, periodoParam?: number) {
+  const supabase = await createClient();
+  const { fy, periodo } = fiscalActual();
+
+  const meta =
+    fyParam != null && periodoParam != null
+      ? { fy: fyParam, periodo: periodoParam }
+      : sumarPeriodos(fy, periodo, 1);
+
+  const colA = sumarPeriodos(meta.fy, meta.periodo, -2);
+  const colB = sumarPeriodos(meta.fy, meta.periodo, -1);
+  const colC = { fy: meta.fy - 1, periodo: meta.periodo };
+
+  const { data, error } = await supabase.rpc("resumen_meta_periodo", {
+    p_fy_a: colA.fy,
+    p_periodo_a: colA.periodo,
+    p_fy_b: colB.fy,
+    p_periodo_b: colB.periodo,
+    p_fy_c: colC.fy,
+    p_periodo_c: colC.periodo,
+    p_fy_meta: meta.fy,
+    p_periodo_meta: meta.periodo,
+  });
+  if (error) throw new Error(`resumen_meta_periodo: ${error.message}`);
+
+  return {
+    fyMeta: meta.fy,
+    periodoMeta: meta.periodo,
+    columnas: { a: colA, b: colB, c: colC },
+    clientes: (data ?? []) as MetaClienteRow[],
   };
 }
