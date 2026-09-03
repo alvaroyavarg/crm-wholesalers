@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
 import { ImportForm } from "./ImportForm";
+import { ImportBottlerForm } from "./ImportBottlerForm";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,21 @@ export default async function DatosPage() {
             Importar base de ventas
           </h2>
           <ImportForm />
+        </Card>
+
+        <Card className="lg:col-span-3">
+          <h2 className="mb-1 font-display text-base font-semibold text-gray-900">
+            Importar venta de los bottlers
+          </h2>
+          <p className="mb-4 text-xs text-gray-500">
+            Los archivos que exporta Andina (KOA) y Embonor (KOE) directamente, sin pasar por la
+            base consolidada de Diageo. Cada archivo trae toda la venta del canal — acá se filtra
+            solo a la cartera de 23 cuentas y se convierte de UC a EUs (5,678/9, ÷10 extra para
+            Smirnoff Ice).
+          </p>
+          <div className="max-w-md">
+            <ImportBottlerForm />
+          </div>
         </Card>
 
         <Card className="h-fit">
