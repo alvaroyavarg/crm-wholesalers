@@ -108,6 +108,18 @@ export async function cargarPanelCliente(input: {
 // La propuesta se guarda como recomendación (estado nueva) para que quede en
 // la ficha y en el feed, con las propuestas dentro de la evidencia.
 export async function recomendarSkusMeta(input: { clienteId: string; fyMeta: number; periodoMeta: number }) {
+  // Next oculta el mensaje de los errores lanzados por acciones en
+  // producción; acá se devuelven como texto para que el panel los muestre.
+  try {
+    return await recomendarSkusMetaInterno(input);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("recomendarSkusMeta:", e);
+    return { ok: false as const, error: `No se pudo generar la propuesta: ${msg}`, texto: "" };
+  }
+}
+
+async function recomendarSkusMetaInterno(input: { clienteId: string; fyMeta: number; periodoMeta: number }) {
   const supabase = await requerirSesion();
   const { clienteId, fyMeta, periodoMeta } = input;
 
@@ -125,8 +137,8 @@ export async function recomendarSkusMeta(input: { clienteId: string; fyMeta: num
       role: "user",
       content:
         `Estamos armando la meta de ${mes} para ${nombre} (id: ${clienteId}, bottler ${cli?.bottler ?? "?"}). ` +
-        `Primero llama a get_historia_sku_meta con fy_meta=${fyMeta} y periodo_meta=${periodoMeta}. ` +
-        `Luego get_boletines_vigentes (usa SOLO los de su bottler), get_notas_cliente y get_perfil_cliente. ` +
+        `En UN solo paso llama a las cuatro herramientas a la vez: get_historia_sku_meta (fy_meta=${fyMeta}, periodo_meta=${periodoMeta}), ` +
+        `get_boletines_vigentes (usa SOLO los de su bottler), get_notas_cliente y get_perfil_cliente. No hagas más llamadas después. ` +
         `Propón entre 3 y 6 SKU para ir a ofrecer este mes, cada uno con un volumen sugerido en EUs y un motivo corto y concreto ` +
         `(qué muestra su historia, si hay escalón vigente, si hay un compromiso anotado). Prioriza: SKU que compraba LY y dejó de comprar, ` +
         `SKU que caen, escalones de boletín alcanzables y compromisos de la bitácora. Respeta la regla de stock. ` +
