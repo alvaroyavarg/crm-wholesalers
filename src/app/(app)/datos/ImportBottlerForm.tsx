@@ -141,6 +141,7 @@ export function ImportBottlerForm() {
             <p className="text-gray-600">
               <strong>{formatEUs(m.eusTotal)} EUs</strong> en {m.clientesReconocidos.length} cuentas ·{" "}
               {m.filasFueraCartera.toLocaleString("es-CL")} filas fuera de la cartera
+              {m.eusOtros !== 0 && <> ({formatEUs(m.eusOtros)} EUs agrupados en &quot;Otros&quot;)</>}
             </p>
           </div>
 

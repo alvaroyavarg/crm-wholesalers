@@ -83,6 +83,7 @@ export interface EstadoImportBottler {
       fechaCorte: string;
       filasLeidas: number;
       filasFueraCartera: number;
+      eusOtros: number;
       eusTotal: number;
       clientesReconocidos: { nombreCorto: string; eus: number }[];
       clientesEsperadosAusentes: string[];

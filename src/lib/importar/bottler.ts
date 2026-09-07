@@ -40,7 +40,8 @@ export interface ResultadoMesBottler {
   fecha: string; // YYYY-MM-01
   fechaCorte: string; // YYYY-MM-DD, último día con datos
   filasLeidas: number;
-  filasFueraCartera: number;
+  filasFueraCartera: number; // filas de códigos fuera de la cartera (van a "Otros")
+  eusOtros: number; // EUs agrupados en la fila "Otros <bottler>"
   eusTotal: number;
   clientesReconocidos: { nombreCorto: string; eus: number }[];
   // Cuentas activas cuyo bottler principal ES este origen y sin embargo no
@@ -256,6 +257,18 @@ export async function importarBottler(
   if (errAct) throw new Error(`clientes: ${errAct.message}`);
   const esperados = (activos ?? []).map((c) => c.nombre_corto ?? c.nombre);
 
+  // Fila agregada "Otros <bottler>": recibe todo lo que no es cartera gestionada
+  const { data: otrosRow, error: errOtros } = await supabase
+    .from("clientes")
+    .select("id, nombre_corto, nombre")
+    .eq("es_otros", true)
+    .eq("bottler", origen)
+    .maybeSingle();
+  if (errOtros) throw new Error(`clientes (otros): ${errOtros.message}`);
+  const otros = otrosRow
+    ? { id: otrosRow.id as string, nombre: (otrosRow.nombre_corto ?? otrosRow.nombre) as string }
+    : null;
+
   // ---- Agrupar por mes; dentro del mes por (cliente, marca, formato) ----
   interface Agregado {
     cliente_id: string;
@@ -286,10 +299,11 @@ export async function importarBottler(
     m.filasLeidas++;
     m.diaMax = Math.max(m.diaMax, f.dia);
 
-    const cliente = codACliente.get(f.codBottler);
+    let cliente = codACliente.get(f.codBottler);
     if (!cliente) {
-      m.fueraCartera++; // cola larga u otro canal: se descarta
-      continue;
+      m.fueraCartera++;
+      if (!otros) continue; // sin fila "Otros" (migración 0016 no aplicada): se descarta
+      cliente = otros; // cola larga: se agrupa en "Otros <bottler>"
     }
     const k = `${cliente.id}|${f.marca}|${f.formato}`;
     let a = m.agregados.get(k);
@@ -360,6 +374,7 @@ export async function importarBottler(
     const clientesEsperadosAusentes = esperados.filter((n) => !reconocidosSet.has(n));
 
     const eusTotal = filasVentas.reduce((s, f) => s + f.eus, 0);
+    const eusOtros = otros ? (porCliente.get(otros.id)?.eus ?? 0) : 0;
 
     // Log de la importación (fecha_corte alimenta el ritmo del MTD)
     const { fy, periodo } = aFiscal(new Date(m.anio, m.mes - 1, 1));
@@ -379,6 +394,7 @@ export async function importarBottler(
       fechaCorte,
       filasLeidas: m.filasLeidas,
       filasFueraCartera: m.fueraCartera,
+      eusOtros: Math.round(eusOtros),
       eusTotal: Math.round(eusTotal),
       clientesReconocidos,
       clientesEsperadosAusentes,

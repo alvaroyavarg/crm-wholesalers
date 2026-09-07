@@ -127,18 +127,25 @@ where not exists (select 1 from clientes where es_otros and bottler = 'KOE');
 -- =========================
 -- 3. Venta de un cliente para un (fy, periodo): normal u "Otros"
 -- =========================
--- "Otros KOA" = suma de la venta KOA de los clientes NO gestionados.
-create or replace function eus_cliente_periodo(p_cliente uuid, p_fy int, p_periodo int)
+-- "Otros KOA" = lo que el importador de Andina agrupa como "Otros" (códigos
+-- fuera de la cartera) + la venta de clientes que dejaron de gestionarse
+-- (activo=false) y que en cargas anteriores entraron con su propio id.
+-- p_bottler (opcional) restringe a la venta de un bottler.
+drop function if exists eus_cliente_periodo(uuid, int, int);
+create or replace function eus_cliente_periodo(
+  p_cliente uuid, p_fy int, p_periodo int, p_bottler text default null
+)
 returns numeric
 language sql stable as $$
   select coalesce(sum(v.eus), 0)
   from clientes c
   join ventas v
-    on (not c.es_otros and v.cliente_id = c.id)
+    on v.cliente_id = c.id
     or (c.es_otros and v.bottler = c.bottler
         and v.cliente_id in (select id from clientes where not activo and not es_otros))
   where c.id = p_cliente
     and fy_de(v.periodo) = p_fy and periodo_de(v.periodo) = p_periodo
+    and (p_bottler is null or v.bottler = p_bottler)
 $$;
 
 -- =========================
@@ -206,7 +213,7 @@ language sql stable as $$
   vv as (
     select v.*
     from cli, ventas v
-    where (not cli.es_otros and v.cliente_id = cli.id)
+    where v.cliente_id = cli.id
        or (cli.es_otros and v.bottler = cli.bottler
            and v.cliente_id in (select id from clientes where not activo and not es_otros))
   ),
@@ -289,10 +296,8 @@ language sql stable as $$
     eus_cliente_periodo(c.id, p_fy - 1, p_periodo),
     coalesce((select pv.eus_plan from plan_ventas pv
               where pv.cliente_id = c.id and pv.anio_fiscal = p_fy and pv.periodo = p_periodo), 0),
-    coalesce((select sum(v.eus) from ventas v where v.cliente_id = c.id and not c.es_otros
-              and fy_de(v.periodo) = p_fy and periodo_de(v.periodo) = p_periodo and v.bottler = 'KOA'), 0),
-    coalesce((select sum(v.eus) from ventas v where v.cliente_id = c.id and not c.es_otros
-              and fy_de(v.periodo) = p_fy and periodo_de(v.periodo) = p_periodo and v.bottler = 'KOE'), 0)
+    eus_cliente_periodo(c.id, p_fy, p_periodo, 'KOA'),
+    eus_cliente_periodo(c.id, p_fy, p_periodo, 'KOE')
   from clientes c
   where c.activo
   order by 6 desc
