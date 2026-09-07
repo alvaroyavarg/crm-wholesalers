@@ -8,6 +8,7 @@ import { formatEUs } from "@/lib/metrics";
 import { catalogoSkus, metaProximoMes } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300; // el panel corre el loop del agente (recomendar SKU)
 
 function hrefMes(fy: number, periodo: number): string {
   return `/meta?fy=${fy}&periodo=${periodo}`;

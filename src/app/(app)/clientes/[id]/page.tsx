@@ -27,6 +27,8 @@ const iconoNota: Record<TipoNota, string> = {
   acuerdo: "🤝",
   rechazo: "🚫",
   nota: "📝",
+  compromiso: "📌",
+  idea: "💡",
 };
 
 export default async function FichaClientePage({

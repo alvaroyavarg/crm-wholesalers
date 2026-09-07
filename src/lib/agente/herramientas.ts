@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Anthropic from "@anthropic-ai/sdk";
-import { fiscalActual, mesDePeriodo } from "@/lib/fiscal";
+import { etiquetaMesCalendario, fiscalActual, mesDePeriodo, sumarPeriodos } from "@/lib/fiscal";
 import type { ItemDetalle, MixCategoriaRow, MixSkuRow, SeriePeriodoRow } from "@/lib/types";
 
 // Herramientas del copiloto. Cada ejecutor devuelve un insight COMPACTO y ya
@@ -27,6 +27,20 @@ export const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: {
         cliente_id: { type: "string", description: "UUID del cliente" },
+      },
+      required: ["cliente_id"],
+    },
+  },
+  {
+    name: "get_historia_sku_meta",
+    description:
+      "Para PLANIFICAR LA META DE UN MES: compra del cliente por SKU en los 3 meses anteriores al mes objetivo y el mismo mes del año anterior (LY), con señales (dejó de comprar, cae vs LY, nuevo), la meta total actual del mes, su desglose por SKU si existe y los pedidos ya registrados. Los nombres de marca y formato son EXACTOS: úsalos tal cual al proponer SKU. Si no se indica fy/periodo, usa el mes fiscal actual.",
+    input_schema: {
+      type: "object",
+      properties: {
+        cliente_id: { type: "string", description: "UUID del cliente" },
+        fy_meta: { type: "integer", description: "Año fiscal del mes objetivo (ej. 2027)" },
+        periodo_meta: { type: "integer", description: "Período fiscal 1..12 del mes objetivo (P1 = julio)" },
       },
       required: ["cliente_id"],
     },
@@ -74,14 +88,14 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "guardar_nota",
     description:
-      "Guarda una nota del cliente (visita, llamada, acuerdo, rechazo o nota).",
+      "Guarda una nota del cliente (visita, llamada, acuerdo, rechazo, nota, compromiso o idea).",
     input_schema: {
       type: "object",
       properties: {
         cliente_id: { type: "string" },
         tipo: {
           type: "string",
-          enum: ["visita", "llamada", "acuerdo", "rechazo", "nota"],
+          enum: ["visita", "llamada", "acuerdo", "rechazo", "nota", "compromiso", "idea"],
         },
         contenido: { type: "string" },
       },
@@ -144,6 +158,13 @@ export async function ejecutarHerramienta(
       return getResumenCartera(supabase);
     case "get_ventas_cliente":
       return getVentasCliente(supabase, String(input.cliente_id));
+    case "get_historia_sku_meta":
+      return getHistoriaSkuMeta(
+        supabase,
+        String(input.cliente_id),
+        input.fy_meta != null ? Number(input.fy_meta) : undefined,
+        input.periodo_meta != null ? Number(input.periodo_meta) : undefined,
+      );
     case "comparar_con_pares":
       return compararConPares(supabase, String(input.cliente_id));
     case "get_perfil_cliente":
@@ -298,6 +319,79 @@ async function getVentasCliente(supabase: SupabaseClient, clienteId: string) {
   };
 }
 
+// Historia por SKU alineada con la vista Meta: M-3, M-2, M-1 y LY del mes
+// objetivo + meta actual (total y por SKU) + pedidos ya registrados.
+export async function getHistoriaSkuMeta(
+  supabase: SupabaseClient,
+  clienteId: string,
+  fyMetaParam?: number,
+  periodoMetaParam?: number,
+) {
+  const actual = fiscalActual();
+  const fyMeta = fyMetaParam ?? actual.fy;
+  const periodoMeta = periodoMetaParam ?? actual.periodo;
+  const a = sumarPeriodos(fyMeta, periodoMeta, -3);
+  const b = sumarPeriodos(fyMeta, periodoMeta, -2);
+  const c = sumarPeriodos(fyMeta, periodoMeta, -1);
+  const d = { fy: fyMeta - 1, periodo: periodoMeta };
+
+  const [cliRes, detRes, planRes, pedRes] = await Promise.all([
+    supabase.from("clientes").select("nombre, nombre_corto, bottler, zona, desarrollador").eq("id", clienteId).single(),
+    supabase.rpc("detalle_meta_cliente", {
+      p_cliente: clienteId,
+      p_fy_a: a.fy, p_periodo_a: a.periodo,
+      p_fy_b: b.fy, p_periodo_b: b.periodo,
+      p_fy_c: c.fy, p_periodo_c: c.periodo,
+      p_fy_d: d.fy, p_periodo_d: d.periodo,
+      p_fy_meta: fyMeta, p_periodo_meta: periodoMeta,
+    }),
+    supabase.from("plan_ventas").select("eus_plan").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta).maybeSingle(),
+    supabase.from("pedidos").select("fecha, marca, formato, eus, estado").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
+  ]);
+  if (detRes.error) return { error: detRes.error.message };
+
+  interface Item { categoria: string; marca: string; formato: string; eus_a: number; eus_b: number; eus_c: number; eus_d: number; meta_eus: number }
+  const items = ((detRes.data ?? []) as Item[]).map((it) => {
+    const ea = Number(it.eus_a), eb = Number(it.eus_b), ec = Number(it.eus_c), ed = Number(it.eus_d);
+    const reciente = (ea + eb + ec) / 3;
+    const senales: string[] = [];
+    if (ed > 0 && ea + eb + ec === 0) senales.push("compraba LY, este año no");
+    else if (ed > 0 && reciente < ed * 0.67) senales.push("cae vs LY");
+    if (ed === 0 && ec > 0) senales.push("nuevo este año");
+    if (ec === 0 && (ea > 0 || eb > 0)) senales.push("sin compra el último mes");
+    return {
+      marca: it.marca,
+      formato: it.formato,
+      categoria: it.categoria,
+      [etiquetaMesCalendario(a.fy, a.periodo)]: r0(ea),
+      [etiquetaMesCalendario(b.fy, b.periodo)]: r0(eb),
+      [etiquetaMesCalendario(c.fy, c.periodo)]: r0(ec),
+      [`${etiquetaMesCalendario(d.fy, d.periodo)} (LY)`]: r0(ed),
+      promedio_3m: r0(reciente),
+      meta_sku_eus: r0(Number(it.meta_eus)),
+      senales,
+    };
+  });
+
+  const metaSku = items.reduce((s, it) => s + Number(it.meta_sku_eus), 0);
+  const pedidos = (pedRes.data ?? []) as { fecha: string; marca: string; formato: string; eus: number; estado: string }[];
+
+  return {
+    cliente: cliRes.data?.nombre_corto ?? cliRes.data?.nombre,
+    bottler: cliRes.data?.bottler ?? null,
+    zona: cliRes.data?.zona ?? null,
+    mes_objetivo: etiquetaMesCalendario(fyMeta, periodoMeta),
+    fy_meta: fyMeta,
+    periodo_meta: periodoMeta,
+    meta_total_eus: r0(Number(planRes.data?.eus_plan ?? 0)),
+    meta_desglosada_sku_eus: r0(metaSku),
+    total_3m_promedio: r0(items.reduce((s, it) => s + Number(it.promedio_3m), 0)),
+    total_ly: r0(items.reduce((s, it) => s + Number(it[`${etiquetaMesCalendario(d.fy, d.periodo)} (LY)`]), 0)),
+    skus: items,
+    pedidos_registrados: pedidos.map((p) => ({ ...p, eus: r0(Number(p.eus)) })),
+  };
+}
+
 async function compararConPares(supabase: SupabaseClient, clienteId: string) {
   const { data: cli } = await supabase
     .from("clientes")
@@ -363,7 +457,7 @@ async function getPerfilCliente(supabase: SupabaseClient, clienteId: string) {
 async function getNotasCliente(supabase: SupabaseClient, clienteId: string, limit: number) {
   const { data } = await supabase
     .from("notas")
-    .select("fecha, tipo, contenido_raw")
+    .select("fecha, tipo, contenido_raw, vence, cerrada_at")
     .eq("cliente_id", clienteId)
     .order("fecha", { ascending: false })
     .limit(Math.min(limit, 30));

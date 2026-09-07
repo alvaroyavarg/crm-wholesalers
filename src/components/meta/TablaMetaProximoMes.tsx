@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState, useTransition } from "react";
 import { guardarMetaMes, guardarMetaSku, obtenerDetalleMeta } from "@/app/(app)/actions";
+import { PanelCliente } from "@/components/meta/PanelCliente";
 import { Chip } from "@/components/ui/Chip";
 import { FACTOR_UC_EU } from "@/lib/importar/unidades";
 import { formatEUs } from "@/lib/metrics";
@@ -68,7 +69,9 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
   const [detalle, setDetalle] = useState<Record<string, DetalleMetaItem[] | "cargando">>({});
   const [skuEdits, setSkuEdits] = useState<Record<string, string>>({});
   const [nuevoSku, setNuevoSku] = useState<Record<string, string>>({});
+  const [panelId, setPanelId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const filaPanel = panelId ? filas.find((f) => f.cliente_id === panelId) ?? null : null;
 
   const zonas = useMemo(
     () => [...new Set(filas.map((f) => f.zona).filter((z): z is string => !!z))].sort(),
@@ -139,6 +142,24 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
     if (abrir && detalle[f.cliente_id] === undefined) cargarDetalle(f.cliente_id);
   }
 
+  // Refleja en la tabla una meta por SKU ya guardada (desde el desglose o
+  // desde el panel): nueva meta total + el ítem en el desglose si está cargado.
+  function aplicarMetaSku(clienteId: string, marca: string, formato: string, eus: number, total: number) {
+    setEdiciones((p) => ({ ...p, [clienteId]: { eus: total > 0 ? String(Math.round(total)) : "", uc: total > 0 ? eusAUc(total) : "" } }));
+    setSkuEdits((p) => ({ ...p, [claveSku(clienteId, marca, formato)]: eus > 0 ? String(Math.round(eus)) : "" }));
+    setDetalle((p) => {
+      const items = p[clienteId];
+      if (!Array.isArray(items)) return p;
+      const existe = items.some((it) => it.marca === marca && it.formato === formato);
+      return {
+        ...p,
+        [clienteId]: existe
+          ? items.map((it) => (it.marca === marca && it.formato === formato ? { ...it, meta_eus: eus } : it))
+          : [{ categoria: "", marca, formato, eus_a: 0, eus_b: 0, eus_c: 0, eus_d: 0, meta_eus: eus }, ...items],
+      };
+    });
+  }
+
   // Meta por SKU: guarda el SKU y refleja la nueva meta total del cliente
   // (la acción devuelve la suma de SKUs, que pasa a ser plan_ventas).
   async function guardarSku(clienteId: string, marca: string, formato: string) {
@@ -150,12 +171,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
     setGuardando((p) => ({ ...p, [k]: true }));
     try {
       const total = await guardarMetaSku({ clienteId, anioFiscal: fyMeta, periodo: periodoMeta, marca, formato, eus });
-      setEdiciones((p) => ({ ...p, [clienteId]: { eus: total > 0 ? String(Math.round(total)) : "", uc: total > 0 ? eusAUc(total) : "" } }));
-      setDetalle((p) => {
-        const items = p[clienteId];
-        if (!Array.isArray(items)) return p;
-        return { ...p, [clienteId]: items.map((it) => (it.marca === marca && it.formato === formato ? { ...it, meta_eus: eus } : it)) };
-      });
+      aplicarMetaSku(clienteId, marca, formato, eus, total);
     } finally {
       setGuardando((p) => ({ ...p, [k]: false }));
     }
@@ -315,7 +331,12 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                     <td className="px-3 py-3 text-gray-600">{f.zona ?? "—"}</td>
                     <td className="px-3 py-3 text-gray-600">{f.desarrollador ?? "—"}</td>
                     <td className="px-3 py-3">
-                      <button onDoubleClick={() => toggleExpandir(f)} onClick={() => toggleExpandir(f)} className="text-left font-medium text-gray-900 hover:text-verde">
+                      <button
+                        onClick={() => setPanelId(f.cliente_id)}
+                        onDoubleClick={() => toggleExpandir(f)}
+                        title="Abrir panel del cliente (doble clic: desglose por SKU en la tabla)"
+                        className={`text-left font-medium hover:text-verde ${panelId === f.cliente_id ? "text-verde" : "text-gray-900"}`}
+                      >
                         {f.nombre_corto ?? f.nombre}
                       </button>
                       {f.es_otros ? (
@@ -427,6 +448,21 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
           </tbody>
         </table>
       </div>
+
+      {filaPanel && (
+        <PanelCliente
+          key={filaPanel.cliente_id}
+          fila={filaPanel}
+          fyMeta={fyMeta}
+          periodoMeta={periodoMeta}
+          etiquetas={etiquetas}
+          periodos={periodos}
+          catalogo={catalogo}
+          metaActual={Number(valorEdicion(filaPanel).eus) || 0}
+          onClose={() => setPanelId(null)}
+          onMetaSku={aplicarMetaSku}
+        />
+      )}
     </div>
   );
 }

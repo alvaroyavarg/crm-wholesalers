@@ -8,7 +8,7 @@ import { Chip } from "@/components/ui/Chip";
 import { formatEUs, formatPct, pctVsLY } from "@/lib/metrics";
 import type { MtdClienteRow, Segmento } from "@/lib/types";
 
-type Columna = "nombre" | "mtd" | "meta" | "avance" | "vsLy" | "bottler";
+type Columna = "nombre" | "mtd" | "pedidos" | "meta" | "avance" | "vsLy" | "bottler";
 
 // Ritmo esperado del mes: se recibe ya calculado desde la fecha de corte,
 // para que cada fila se compare contra el mismo patrón que el encabezado.
@@ -31,6 +31,7 @@ export function TablaMtd({
     { col: "nombre", etiqueta: "Cliente" },
     { col: "bottler", etiqueta: "Distribuidor" },
     { col: "mtd", etiqueta: "MTD", alinear: "right" },
+    { col: "pedidos", etiqueta: "Pedidos en curso", alinear: "right" },
     { col: "meta", etiqueta: "Meta del mes", alinear: "right" },
     { col: "avance", etiqueta: "Avance" },
     { col: "vsLy", etiqueta: "vs LY", alinear: "right" },
@@ -44,6 +45,8 @@ export function TablaMtd({
         return f.bottler ?? "";
       case "mtd":
         return Number(f.mtd_eus);
+      case "pedidos":
+        return Number(f.pedidos_eus ?? 0);
       case "meta":
         return Number(f.plan_mes_eus);
       case "avance":
@@ -143,6 +146,13 @@ export function TablaMtd({
 
                 <td className="px-3 py-3 text-right font-medium text-gray-900">
                   {formatEUs(mtd)}
+                </td>
+
+                <td
+                  className="px-3 py-3 text-right text-gray-500"
+                  title="Pedidos registrados a mano (comprometidos o ingresados) que la venta del bottler aún no refleja"
+                >
+                  {Number(f.pedidos_eus ?? 0) > 0 ? `+${formatEUs(Number(f.pedidos_eus))}` : "—"}
                 </td>
 
                 <td className="px-3 py-3 text-right">

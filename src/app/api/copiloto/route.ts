@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
-  let body: { mensajes?: MensajeChat[] };
+  let body: { mensajes?: MensajeChat[]; cliente_id?: string; conversacion_id?: string };
   try {
     body = await req.json();
   } catch {
@@ -29,9 +29,32 @@ export async function POST(req: Request) {
 
   try {
     const resultado = await correrAgente(supabase, historial);
+
+    // Chat en contexto de un cliente (panel de Meta): se persiste en
+    // conversaciones para retomarlo la próxima vez que se abra el panel.
+    let conversacionId = body.conversacion_id ?? null;
+    if (body.cliente_id) {
+      const mensajes = [...historial, { role: "assistant", content: resultado.texto }];
+      const ahora = new Date().toISOString();
+      if (conversacionId) {
+        await supabase
+          .from("conversaciones")
+          .update({ mensajes, actualizada_at: ahora })
+          .eq("id", conversacionId);
+      } else {
+        const { data } = await supabase
+          .from("conversaciones")
+          .insert({ cliente_id: body.cliente_id, mensajes, actualizada_at: ahora })
+          .select("id")
+          .single();
+        conversacionId = (data?.id as string | undefined) ?? null;
+      }
+    }
+
     return NextResponse.json({
       texto: resultado.texto,
       herramientas: resultado.herramientas,
+      conversacion_id: conversacionId,
     });
   } catch (e) {
     console.error("copiloto error:", e);

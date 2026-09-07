@@ -43,12 +43,13 @@ export async function guardarPlan(
 
 // ---- Notas / visitas ----
 
-const TIPOS_NOTA = ["visita", "llamada", "acuerdo", "rechazo", "nota"] as const;
+const TIPOS_NOTA = ["visita", "llamada", "acuerdo", "rechazo", "nota", "compromiso", "idea"] as const;
 
 export async function crearNota(input: {
   clienteId: string;
   tipo: string;
   contenido: string;
+  vence?: string | null; // solo compromisos (YYYY-MM-DD)
 }) {
   const tipo = TIPOS_NOTA.includes(input.tipo as (typeof TIPOS_NOTA)[number])
     ? input.tipo
@@ -66,6 +67,7 @@ export async function crearNota(input: {
       tipo,
       contenido_raw: contenido,
       creado_por_agente: false,
+      vence: tipo === "compromiso" && input.vence ? input.vence : null,
     })
     .select("id")
     .single();
@@ -83,6 +85,7 @@ export async function crearNota(input: {
   }
 
   revalidatePath("/");
+  revalidatePath("/meta");
   revalidatePath(`/clientes/${input.clienteId}`);
 }
 

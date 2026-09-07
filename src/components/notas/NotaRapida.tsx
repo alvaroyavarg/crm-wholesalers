@@ -15,6 +15,8 @@ const TIPOS: { valor: TipoNota; etiqueta: string; icono: string }[] = [
   { valor: "acuerdo", etiqueta: "Acuerdo", icono: "🤝" },
   { valor: "rechazo", etiqueta: "Rechazo", icono: "🚫" },
   { valor: "nota", etiqueta: "Nota", icono: "📝" },
+  { valor: "compromiso", etiqueta: "Compromiso", icono: "📌" },
+  { valor: "idea", etiqueta: "Idea", icono: "💡" },
 ];
 
 export interface ClienteOpcion {

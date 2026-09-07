@@ -1,5 +1,5 @@
 export type Segmento = "TOP3" | "CLAVE";
-export type TipoNota = "visita" | "llamada" | "acuerdo" | "rechazo" | "nota";
+export type TipoNota = "visita" | "llamada" | "acuerdo" | "rechazo" | "nota" | "compromiso" | "idea";
 
 export interface Cliente {
   id: string;
@@ -165,6 +165,36 @@ export interface Nota {
   contenido_raw: string;
   contenido_estructurado: EstructuraNota | null;
   creado_por_agente: boolean;
+  vence?: string | null; // compromisos: fecha límite
+  cerrada_at?: string | null; // compromisos: cumplido
+}
+
+// ---- Pedidos registrados a mano (panel de cliente en Meta) ----
+export type EstadoPedido = "comprometido" | "ingresado" | "facturado";
+
+export interface Pedido {
+  id: string;
+  cliente_id: string;
+  fecha: string;
+  anio_fiscal: number;
+  periodo: number;
+  bottler: string | null;
+  marca: string;
+  formato: string;
+  uc: number | null;
+  eus: number;
+  estado: EstadoPedido;
+  comentario: string | null;
+  creado_at: string;
+}
+
+// Propuesta de SKU del copiloto para la meta del mes
+export interface PropuestaSku {
+  marca: string;
+  formato: string;
+  eus: number;
+  motivo: string;
+  evidencia: "ventas" | "boletin" | "memoria";
 }
 
 export interface Perfil {
@@ -207,6 +237,7 @@ export interface MtdClienteRow {
   plan_mes_eus: number;
   mtd_koa: number;
   mtd_koe: number;
+  pedidos_eus?: number; // pedidos en curso (comprometido/ingresado) no reflejados aún en la venta
 }
 
 export interface MtdCategoriaRow {

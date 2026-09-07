@@ -26,6 +26,7 @@ export default async function MtdPage() {
   const brecha = totalMeta - totalMtd;
 
   const sinMeta = clientes.filter((c) => Number(c.plan_mes_eus) <= 0).length;
+  const totalPedidos = clientes.reduce((a, c) => a + Number(c.pedidos_eus ?? 0), 0);
 
   return (
     <div>
@@ -94,9 +95,11 @@ export default async function MtdPage() {
           etiqueta={brecha > 0 ? "Falta para la meta" : "Sobre la meta"}
           valor={`${formatEUs(Math.abs(brecha))} EUs`}
           detalle={
-            ritmo.diasConDatos < ritmo.diasMes && brecha > 0
-              ? `${formatEUs(brecha / Math.max(ritmo.diasMes - ritmo.diasConDatos, 1))} EUs/día restantes`
-              : undefined
+            totalPedidos > 0
+              ? `${formatEUs(totalPedidos)} EUs en pedidos en curso · ${formatEUs(Math.max(brecha - totalPedidos, 0))} por cubrir`
+              : ritmo.diasConDatos < ritmo.diasMes && brecha > 0
+                ? `${formatEUs(brecha / Math.max(ritmo.diasMes - ritmo.diasConDatos, 1))} EUs/día restantes`
+                : undefined
           }
         />
       </div>
