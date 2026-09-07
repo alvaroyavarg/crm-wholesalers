@@ -8,13 +8,15 @@
 -- separa por cliente.
 
 -- ---- Meta total por cliente ----
-insert into plan_ventas (cliente_id, anio_fiscal, periodo, eus_plan, actualizado_at)
+-- Si dos códigos del Armado apuntan al mismo cliente en la app (ej. Henríquez
+-- o Zapata con código Andina y Embonor), se suman: un upsert por cliente.
+with metas as (
 select
   coalesce(
     (select cc.cliente_id from cliente_codigos cc where cc.sistema = 'DIAGEO' and cc.cod_cliente = t.cod),
     (select c.id from clientes c where c.es_otros and c.bottler = t.bottler)
-  ),
-  2027, 3, t.eus, now()
+  ) as cliente_id,
+  t.eus
 from (values
     ('934153', 'KOA', 3349),
     ('282155', 'KOA', 1417),
@@ -59,16 +61,18 @@ from (values
     ('227445', 'KOE', 0),
     (null, 'KOE', 1253)
 ) as t(cod, bottler, eus)
-where coalesce(
-    (select cc.cliente_id from cliente_codigos cc where cc.sistema = 'DIAGEO' and cc.cod_cliente = t.cod),
-    (select c.id from clientes c where c.es_otros and c.bottler = t.bottler)
-  ) is not null
+)
+insert into plan_ventas (cliente_id, anio_fiscal, periodo, eus_plan, actualizado_at)
+select cliente_id, 2027, 3, sum(eus), now()
+from metas
+where cliente_id is not null
+group by cliente_id
 on conflict (cliente_id, anio_fiscal, periodo)
 do update set eus_plan = excluded.eus_plan, actualizado_at = now();
 
 -- ---- Meta por SKU (Multi RM) ----
 insert into plan_ventas_sku (cliente_id, anio_fiscal, periodo, marca, formato, eus_plan)
-select cc.cliente_id, 2027, 3, t.marca, t.formato, t.eus
+select cc.cliente_id, 2027, 3, t.marca, t.formato, sum(t.eus)
 from (values
     ('934153', 'JW Red Label', '0.75L', 640),
     ('934153', 'JW Red Label', '1.0L', 667),
@@ -126,6 +130,7 @@ from (values
     ('1064226', 'Buchanan''s DeLuxe Aged 12 Years', '1.0L', 27)
 ) as t(cod, marca, formato, eus)
 join cliente_codigos cc on cc.sistema = 'DIAGEO' and cc.cod_cliente = t.cod
+group by cc.cliente_id, t.marca, t.formato
 on conflict (cliente_id, anio_fiscal, periodo, marca, formato)
 do update set eus_plan = excluded.eus_plan, actualizado_at = now();
 
