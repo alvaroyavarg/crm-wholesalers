@@ -5,7 +5,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { fiscalActual } from "@/lib/fiscal";
 import { importarBase, parsearBase } from "@/lib/importar/core";
-import { importarBottler, parsearKOA, parsearKOE } from "@/lib/importar/bottler";
+import {
+  HistoricoProtegidoError,
+  importarBottler,
+  parsearKOA,
+  parsearKOE,
+} from "@/lib/importar/bottler";
 
 export interface EstadoImport {
   ok: boolean;
@@ -66,13 +71,22 @@ export async function importarVentasAction(
 export interface EstadoImportBottler {
   ok: boolean;
   mensaje: string;
+  // Si el archivo trae meses de FYs anteriores y no se autorizó, se listan
+  // para que el usuario decida (marcando la casilla y reintentando).
+  mesesProtegidos?: string[];
   detalle?: {
-    eusTotal: number;
     filasLeidas: number;
-    filasDescartadas: number;
-    clientesReconocidos: { nombreCorto: string; eus: number }[];
-    clientesEsperadosAusentes: string[];
+    filasPieDePagina: number;
     productosSinMapeo: string[];
+    meses: {
+      fecha: string;
+      fechaCorte: string;
+      filasLeidas: number;
+      filasFueraCartera: number;
+      eusTotal: number;
+      clientesReconocidos: { nombreCorto: string; eus: number }[];
+      clientesEsperadosAusentes: string[];
+    }[];
   };
 }
 
@@ -94,55 +108,26 @@ export async function importarBottlerAction(
   if (origen !== "KOA" && origen !== "KOE") {
     return { ok: false, mensaje: "Selecciona el distribuidor (Andina o Embonor)." };
   }
+  const permitirHistorico = formData.get("permitir_historico") === "on";
 
   try {
     const buffer = await archivo.arrayBuffer();
-    const admin = createAdminClient();
 
-    let mes: number;
-    let anio: number;
-    let filas: Awaited<ReturnType<typeof parsearKOA>>["filas"];
-    let descartadas: number;
-    let sinMapeo: Set<string>;
-
+    let parseado;
     if (origen === "KOA") {
-      const mesForm = Number(formData.get("mes"));
-      const anioForm = Number(formData.get("anio"));
-      if (!mesForm || mesForm < 1 || mesForm > 12 || !anioForm) {
-        return { ok: false, mensaje: "El archivo de Andina no trae el mes: indícalo." };
-      }
-      mes = mesForm;
-      anio = anioForm;
-      const r = parsearKOA(buffer, mes, anio);
-      filas = r.filas;
-      descartadas = r.descartadas;
-      sinMapeo = r.sinMapeo;
+      // mes/año solo se usan si el archivo no trae la columna de mes
+      const mes = Number(formData.get("mes"));
+      const anio = Number(formData.get("anio"));
+      const fallback = mes >= 1 && mes <= 12 && anio ? { mes, anio } : undefined;
+      parseado = parsearKOA(buffer, fallback);
     } else {
-      const r = parsearKOE(buffer);
-      if (!r.mes) {
-        return { ok: false, mensaje: "No se pudo leer el mes/año del archivo de Embonor." };
-      }
-      mes = r.mes;
-      anio = r.anio;
-      filas = r.filas;
-      descartadas = r.descartadas;
-      sinMapeo = r.sinMapeo;
+      parseado = parsearKOE(buffer);
     }
 
-    if (filas.length === 0) {
-      return { ok: false, mensaje: "El archivo no tiene filas de venta reconocibles." };
-    }
-
-    const resultado = await importarBottler(
-      admin,
-      origen,
-      filas,
-      mes,
-      anio,
-      descartadas,
-      sinMapeo,
-      archivo.name,
-    );
+    const admin = createAdminClient();
+    const r = await importarBottler(admin, origen, parseado, archivo.name, {
+      permitirHistorico,
+    });
 
     revalidatePath("/");
     revalidatePath("/mtd");
@@ -151,25 +136,24 @@ export async function importarBottlerAction(
     revalidatePath("/", "layout");
 
     const nombreOrigen = origen === "KOA" ? "Andina" : "Embonor";
+    const totalEus = r.meses.reduce((s, m) => s + m.eusTotal, 0);
     return {
       ok: true,
       mensaje:
-        `${nombreOrigen} · ${resultado.filasLeidas.toLocaleString("es-CL")} filas leídas, ` +
-        `${resultado.eusTotal.toLocaleString("es-CL")} EUs cargados en ` +
-        `${resultado.clientesReconocidos.length} cuentas.` +
-        (resultado.filasDescartadas > 0
-          ? ` ${resultado.filasDescartadas.toLocaleString("es-CL")} filas fuera de la cartera (otros canales / cola larga).`
-          : ""),
+        `${nombreOrigen} · ${r.meses.length} ${r.meses.length === 1 ? "mes" : "meses"} ` +
+        `(${r.meses.map((m) => m.fecha.slice(0, 7)).join(", ")}) · ` +
+        `${totalEus.toLocaleString("es-CL")} EUs cargados.`,
       detalle: {
-        eusTotal: resultado.eusTotal,
-        filasLeidas: resultado.filasLeidas,
-        filasDescartadas: resultado.filasDescartadas,
-        clientesReconocidos: resultado.clientesReconocidos,
-        clientesEsperadosAusentes: resultado.clientesEsperadosAusentes,
-        productosSinMapeo: resultado.productosSinMapeo,
+        filasLeidas: r.filasLeidas,
+        filasPieDePagina: r.filasPieDePagina,
+        productosSinMapeo: r.productosSinMapeo,
+        meses: r.meses,
       },
     };
   } catch (e) {
+    if (e instanceof HistoricoProtegidoError) {
+      return { ok: false, mensaje: e.message, mesesProtegidos: e.meses };
+    }
     return {
       ok: false,
       mensaje: e instanceof Error ? e.message : "Error desconocido al importar",

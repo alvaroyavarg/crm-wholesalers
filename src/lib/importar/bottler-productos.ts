@@ -19,15 +19,20 @@ export interface ProductoCanonico {
 
 // ---- Formato: de "750 ML" / "1 LTR" / "0.75L" del bottler → convención L6 ----
 const FORMATOS: [RegExp, string][] = [
-  [/1[.,]?75\s*l/i, "1.75L"],
-  [/\b1\s*(l\b|lt\b|ltr)/i, "1L"],
-  [/700\s*(cc|ml)/i, "0.7L"],
-  [/750\s*(cc|ml)/i, "0.75L"],
-  [/473/, "0.473L"],
-  [/375\s*(cc|ml)/i, "0.375L"],
-  [/355\s*(cc|ml)|355x/i, "0.355L"],
-  [/200\s*(cc|ml)|200x/i, "0.2L"],
-  [/\b50\s*(cc|ml)/i, "0.05L"],
+  // Los bottlers escriben el formato de mil formas: "750 ML", "750CC",
+  // "1X750", "1X 750 40°", "1 LTR", "1X1LT", "1750", "200X6", "6X473".
+  // Se busca el número aislado de otros dígitos (para no leer "750" dentro
+  // del código de SKU "126750") en orden de mayor a menor ambigüedad.
+  [/(?<!\d)1[.,]?75\s*l|(?<!\d)1750(?!\d)/i, "1.75L"],
+  [/(?<!\d)1[.,]5\s*l/i, "1.5L"],
+  [/(?<!\d)1\s*(l\b|lt\b|ltr|lt\d)|1x\s*1\s*l/i, "1L"],
+  [/(?<!\d)750(?!\d)/, "0.75L"],
+  [/(?<!\d)700(?!\d)/, "0.7L"],
+  [/(?<!\d)473(?!\d)/, "0.473L"],
+  [/(?<!\d)375(?!\d)/, "0.375L"],
+  [/(?<!\d)355(?!\d)/, "0.355L"],
+  [/(?<!\d)200(?!\d)/, "0.2L"],
+  [/(?<!\d)50\s*(cc|ml)/i, "0.05L"],
 ];
 
 function detectarFormato(texto: string): string {
@@ -72,8 +77,12 @@ const REGLAS: [RegExp, string, string][] = [
   [/bulleit/i, "Bulleit Bourbon", "Whisky Reserve"],
   [/bell'?s/i, "Bell's", "Whisky Primary"],
   [/j\s*&\s*b/i, "J&B", "Whisky Primary"],
-  [/singleton.*18/i, "Singleton 18", "Whisky Reserve"],
-  [/singleton.*15|singl\s*15/i, "Singleton 15", "Whisky Reserve"],
+  [/singleton.*18|singl\.?\s*18/i, "Singleton 18", "Whisky Reserve"],
+  [/singleton.*15|singl\.?\s*15/i, "Singleton 15", "Whisky Reserve"],
+  [/singleton.*12|singl\.?\s*12/i, "Singleton 12", "Whisky Reserve"],
+  [/singleton|singl\b/i, "Singleton", "Whisky Reserve"],
+  // Edición Game of Thrones ("JW GOT FIRE" / "A Song of Fire")
+  [/got\s*fire|song\s*of\s*fire|jw\s*fire?\b/i, "JW A Song of Fire", "Whisky Reserve"],
 
   // ---- Vodka / RTD ----
   // OJO: el divisor de Smirnoff Ice se aplica en unidades.ts (esSmirnoffIce),
