@@ -85,14 +85,15 @@ export function TablaMtd({
               <th
                 key={c.col}
                 onClick={() => ordenarPor(c.col)}
+                title="Ordenar (clic de nuevo invierte)"
                 className={`cursor-pointer select-none px-3 py-3 font-medium first:pl-5 hover:text-gray-700 ${
                   c.alinear === "right" ? "text-right" : ""
                 }`}
               >
                 {c.etiqueta}
-                {orden === c.col && (
-                  <span className="ml-1 text-gray-400">{asc ? "▲" : "▼"}</span>
-                )}
+                <span className={`ml-1 ${orden === c.col ? "text-gray-600" : "text-gray-300"}`}>
+                  {orden === c.col ? (asc ? "▲" : "▼") : "⇅"}
+                </span>
               </th>
             ))}
           </tr>

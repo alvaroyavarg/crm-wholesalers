@@ -7,7 +7,8 @@ import { FACTOR_UC_EU } from "@/lib/importar/unidades";
 import { formatEUs } from "@/lib/metrics";
 import type { DetalleMetaItem, MetaClienteRow } from "@/lib/types";
 
-type Columna = "nombre" | "eus_a" | "eus_b" | "eus_c" | "meta_eus";
+type Columna = "cod" | "bottler" | "nombre" | "eus_a" | "eus_b" | "eus_c" | "meta_eus";
+type ColumnaDetalle = "sku" | "eus_a" | "eus_b" | "eus_c";
 
 interface Props {
   filas: MetaClienteRow[];
@@ -49,6 +50,8 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
   const [guardando, setGuardando] = useState<Record<string, boolean>>({});
   const [expandido, setExpandido] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<Record<string, DetalleMetaItem[] | "cargando">>({});
+  const [ordenDet, setOrdenDet] = useState<ColumnaDetalle>("eus_a");
+  const [ascDet, setAscDet] = useState(false);
   const [, startTransition] = useTransition();
 
   function valorEdicion(f: MetaClienteRow): EdicionMeta {
@@ -121,7 +124,9 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
     }
   }
 
-  const columnas: { col: Columna; etiqueta: string; alinear?: "right" }[] = [
+  const columnas: { col: Columna; etiqueta: string; alinear?: "right"; title?: string }[] = [
+    { col: "cod", etiqueta: "ID cliente" },
+    { col: "bottler", etiqueta: "Distribuidor" },
     { col: "nombre", etiqueta: "Cliente" },
     { col: "eus_a", etiqueta: etiquetas.a, alinear: "right" },
     { col: "eus_b", etiqueta: etiquetas.b, alinear: "right" },
@@ -130,26 +135,49 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
   ];
 
   function valor(f: MetaClienteRow, col: Columna): number | string {
+    if (col === "cod") return Number(String(f.cod_diageo ?? "").split(" / ")[0]) || 0;
+    if (col === "bottler") return etiquetaBottler(f.bottler);
     if (col === "nombre") return f.nombre_corto ?? f.nombre;
     if (col === "meta_eus") return Number(f.meta_eus);
     return Number(f[col]);
   }
 
-  const ordenadas = [...filas].sort((a, b) => {
-    const va = valor(a, orden);
-    const vb = valor(b, orden);
+  function valorDetalle(it: DetalleMetaItem, col: ColumnaDetalle): number | string {
+    if (col === "sku") return `${it.marca} ${it.formato}`;
+    return Number(it[col]);
+  }
+
+  function ordenarDetalle(col: ColumnaDetalle) {
+    if (col === ordenDet) setAscDet(!ascDet);
+    else {
+      setOrdenDet(col);
+      setAscDet(col === "sku");
+    }
+  }
+
+  function comparar(va: number | string, vb: number | string, ascendente: boolean) {
     const cmp =
       typeof va === "string" && typeof vb === "string"
         ? va.localeCompare(vb, "es")
         : Number(va) - Number(vb);
-    return asc ? cmp : -cmp;
-  });
+    return ascendente ? cmp : -cmp;
+  }
+
+  // Indicador de orden: visible siempre (tenue) para que se note que la
+  // columna es ordenable; marcado cuando está activa.
+  const indicador = (activa: boolean, ascendente: boolean) => (
+    <span className={`ml-1 ${activa ? "text-gray-600" : "text-gray-300"}`}>
+      {activa ? (ascendente ? "▲" : "▼") : "⇅"}
+    </span>
+  );
+
+  const ordenadas = [...filas].sort((a, b) => comparar(valor(a, orden), valor(b, orden), asc));
 
   function ordenarPor(col: Columna) {
     if (col === orden) setAsc(!asc);
     else {
       setOrden(col);
-      setAsc(col === "nombre");
+      setAsc(col === "nombre" || col === "bottler" || col === "cod");
     }
   }
 
@@ -159,20 +187,17 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
         <thead>
           <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
             <th className="w-8 px-2 py-3" />
-            <th className="px-3 py-3 font-medium">ID cliente</th>
-            <th className="px-3 py-3 font-medium">Distribuidor</th>
             {columnas.map((c) => (
               <th
                 key={c.col}
                 onClick={() => ordenarPor(c.col)}
+                title="Ordenar (clic de nuevo invierte)"
                 className={`cursor-pointer select-none px-3 py-3 font-medium hover:text-gray-700 ${
                   c.alinear === "right" ? "text-right" : ""
                 }`}
               >
                 {c.etiqueta}
-                {orden === c.col && (
-                  <span className="ml-1 text-gray-400">{asc ? "▲" : "▼"}</span>
-                )}
+                {indicador(orden === c.col, asc)}
               </th>
             ))}
             <th className="px-3 py-3 text-right font-medium" title="Meta en cajas del bottler (UC), derivada con el factor estándar EU = UC × 5,678/9">
@@ -201,6 +226,14 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                   <td className="px-3 py-3 font-mono text-xs text-gray-500">
                     {f.cod_diageo ?? "—"}
                   </td>
+                  <td className="px-3 py-3 text-gray-600">
+                    {etiquetaBottler(f.bottler)}
+                    {f.es_frontera && (
+                      <span className="ml-1.5 align-middle">
+                        <Chip variante="ambar">frontera</Chip>
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-3">
                     <button
                       onClick={() => toggleExpandir(f)}
@@ -211,14 +244,6 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                     {f.segmento === "TOP3" && (
                       <span className="ml-2 align-middle">
                         <Chip variante="azul">TOP3</Chip>
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-gray-600">
-                    {etiquetaBottler(f.bottler)}
-                    {f.es_frontera && (
-                      <span className="ml-1.5 align-middle">
-                        <Chip variante="ambar">frontera</Chip>
                       </span>
                     )}
                   </td>
@@ -251,53 +276,70 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                   </td>
                 </tr>
 
-                {abierto && (
+                {abierto && (items === "cargando" || items === undefined) && (
                   <tr className="bg-gray-50/60">
-                    <td colSpan={9} className="px-5 py-3">
-                      {items === "cargando" || items === undefined ? (
-                        <p className="text-xs text-gray-400">Cargando compra por SKU…</p>
-                      ) : items.length === 0 ? (
-                        <p className="text-xs text-gray-400">
-                          Sin compras en {etiquetas.a}, {etiquetas.b} o {etiquetas.c}.
-                        </p>
-                      ) : (
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-left text-gray-400">
-                              <th className="py-1 font-medium">SKU</th>
-                              <th className="py-1 text-right font-medium">{etiquetas.a}</th>
-                              <th className="py-1 text-right font-medium">{etiquetas.b}</th>
-                              <th className="py-1 text-right font-medium">{etiquetas.c}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {items.map((it, i) => (
-                              <tr key={i} className="border-t border-gray-100">
-                                <td className="py-1.5 text-gray-700">
-                                  {it.marca}
-                                  {it.formato && (
-                                    <span className="text-gray-400"> · {it.formato}</span>
-                                  )}
-                                  <span className="ml-1.5 text-[10px] text-gray-300">
-                                    {it.categoria}
-                                  </span>
-                                </td>
-                                <td className="py-1.5 text-right text-gray-600">
-                                  {formatEUs(it.eus_a)}
-                                </td>
-                                <td className="py-1.5 text-right text-gray-600">
-                                  {formatEUs(it.eus_b)}
-                                </td>
-                                <td className="py-1.5 text-right text-gray-400">
-                                  {formatEUs(it.eus_c)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
+                    <td colSpan={9} className="px-5 py-3 text-xs text-gray-400">
+                      Cargando compra por SKU…
                     </td>
                   </tr>
+                )}
+                {abierto && Array.isArray(items) && items.length === 0 && (
+                  <tr className="bg-gray-50/60">
+                    <td colSpan={9} className="px-5 py-3 text-xs text-gray-400">
+                      Sin compras en {etiquetas.a}, {etiquetas.b} o {etiquetas.c}.
+                    </td>
+                  </tr>
+                )}
+                {abierto && Array.isArray(items) && items.length > 0 && (
+                  <>
+                    {/* Encabezado del desglose: mismas celdas que la tabla, así
+                        cada mes cae exactamente bajo su columna. */}
+                    <tr className="bg-gray-50/60 text-[11px] text-gray-400">
+                      <td />
+                      <td />
+                      <td />
+                      {(
+                        [
+                          ["sku", "SKU"],
+                          ["eus_a", etiquetas.a],
+                          ["eus_b", etiquetas.b],
+                          ["eus_c", `${etiquetas.c} (LY)`],
+                        ] as [ColumnaDetalle, string][]
+                      ).map(([col, et]) => (
+                        <td
+                          key={col}
+                          onClick={() => ordenarDetalle(col)}
+                          className={`cursor-pointer select-none px-3 py-1.5 font-medium hover:text-gray-600 ${
+                            col === "sku" ? "" : "text-right"
+                          }`}
+                        >
+                          {et}
+                          {indicador(ordenDet === col, ascDet)}
+                        </td>
+                      ))}
+                      <td />
+                      <td />
+                    </tr>
+                    {[...items]
+                      .sort((x, y) => comparar(valorDetalle(x, ordenDet), valorDetalle(y, ordenDet), ascDet))
+                      .map((it, i) => (
+                        <tr key={i} className="bg-gray-50/60 text-xs">
+                          <td />
+                          <td />
+                          <td />
+                          <td className="px-3 py-1.5 text-gray-700">
+                            {it.marca}
+                            {it.formato && <span className="text-gray-400"> · {it.formato}</span>}
+                            <span className="ml-1.5 text-[10px] text-gray-300">{it.categoria}</span>
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_a)}</td>
+                          <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_b)}</td>
+                          <td className="px-3 py-1.5 text-right text-gray-400">{formatEUs(it.eus_c)}</td>
+                          <td />
+                          <td />
+                        </tr>
+                      ))}
+                  </>
                 )}
               </Fragment>
             );
