@@ -16,7 +16,8 @@ const enlaces = [
 
 const proximamente: { etiqueta: string; icono: string; fase: string }[] = [];
 
-export function NavLinks() {
+// `colapsado` = riel de íconos en escritorio (la etiqueta pasa al tooltip).
+export function NavLinks({ colapsado = false }: { colapsado?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -28,14 +29,15 @@ export function NavLinks() {
           <Link
             key={e.href}
             href={e.href}
+            title={e.etiqueta}
             className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
               activo
                 ? "bg-verde-suave text-verde"
                 : "text-gray-600 hover:bg-gray-50"
-            }`}
+            } ${colapsado ? "lg:justify-center lg:px-0" : ""}`}
           >
             <span>{e.icono}</span>
-            {e.etiqueta}
+            <span className={colapsado ? "lg:hidden" : ""}>{e.etiqueta}</span>
           </Link>
         );
       })}
@@ -47,8 +49,10 @@ export function NavLinks() {
           title={`Disponible en ${e.fase}`}
         >
           <span className="opacity-50">{e.icono}</span>
-          {e.etiqueta}
-          <span className="ml-auto text-[10px] uppercase">{e.fase}</span>
+          <span className={colapsado ? "lg:hidden" : ""}>{e.etiqueta}</span>
+          {!colapsado && (
+            <span className="ml-auto text-[10px] uppercase">{e.fase}</span>
+          )}
         </span>
       ))}
     </nav>
