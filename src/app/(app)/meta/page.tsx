@@ -67,7 +67,7 @@ export default async function MetaPage({
             cartera activa ({clientes.filter((c) => !c.es_otros).length} cuentas + Otros por bottler)
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-full items-center gap-2">
           <Link
             href={hrefMes(mesAnterior.fy, mesAnterior.periodo)}
             title="Mes anterior"
@@ -75,14 +75,14 @@ export default async function MetaPage({
           >
             ←
           </Link>
-          <div className="flex overflow-hidden rounded-lg border border-gray-200">
+          <div className="flex overflow-x-auto rounded-lg border border-gray-200">
             {ventanaMeses.map((m) => {
               const activo = m.fy === fyMeta && m.periodo === periodoMeta;
               return (
                 <Link
                   key={`${m.fy}-${m.periodo}`}
                   href={hrefMes(m.fy, m.periodo)}
-                  className={`border-r border-gray-200 px-3 py-1.5 text-sm last:border-r-0 ${
+                  className={`shrink-0 border-r border-gray-200 px-3 py-1.5 text-sm last:border-r-0 ${
                     activo
                       ? "bg-verde text-white"
                       : "text-gray-600 hover:bg-gray-50"
@@ -103,7 +103,7 @@ export default async function MetaPage({
         </div>
       </div>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <KpiCard icono="📦" etiqueta={etiquetas.a} valor={`${formatEUs(totalA)} EUs`} />
         <KpiCard icono="📦" etiqueta={etiquetas.b} valor={`${formatEUs(totalB)} EUs`} />
         <KpiCard icono="📦" etiqueta={etiquetas.c} valor={`${formatEUs(totalC)} EUs`} />
@@ -131,7 +131,7 @@ export default async function MetaPage({
           <p className="text-sm font-medium text-gray-700">
             Trabajar la meta por cuenta
             <span className="ml-2 text-xs font-normal text-gray-400">
-              clic en el nombre o la flecha: compra por SKU y meta por SKU
+              toca el nombre para abrir el panel del cliente
             </span>
           </p>
           <div className="flex items-center gap-2">

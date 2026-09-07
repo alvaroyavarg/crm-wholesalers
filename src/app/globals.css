@@ -22,3 +22,13 @@
 body {
   background-color: var(--color-fondo);
 }
+
+/* iOS hace zoom al enfocar campos con letra < 16px. En móvil los campos
+   suben a 16px (el resto del texto no cambia). */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

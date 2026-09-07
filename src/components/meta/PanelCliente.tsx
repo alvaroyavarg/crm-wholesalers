@@ -122,6 +122,8 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
   const [recomendando, setRecomendando] = useState(false);
   const [errorReco, setErrorReco] = useState("");
   const [usando, setUsando] = useState<Record<string, boolean>>({});
+  const [metaSkuEdits, setMetaSkuEdits] = useState<Record<string, string>>({});
+  const [guardandoSku, setGuardandoSku] = useState<Record<string, boolean>>({});
   const [usados, setUsados] = useState<Record<string, boolean>>({});
   const [mensajes, setMensajes] = useState<MensajeChat[]>([]);
   const [conversacionId, setConversacionId] = useState<string | null>(null);
@@ -254,6 +256,25 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
       setErrorReco(e instanceof Error ? e.message : "No se pudo guardar");
     } finally {
       setUsando((x) => ({ ...x, [k]: false }));
+    }
+  }
+
+  // ---- historia: meta por SKU editable desde el panel ----
+  async function guardarMetaSkuPanel(it: DetalleMetaItem) {
+    const k = `${it.marca}|${it.formato}`;
+    const txt = metaSkuEdits[k];
+    if (txt === undefined) return;
+    const eus = txt.trim() === "" ? 0 : Number(txt.replace(",", "."));
+    if (!Number.isFinite(eus) || eus < 0 || eus === Number(it.meta_eus)) return;
+    setGuardandoSku((x) => ({ ...x, [k]: true }));
+    try {
+      const total = await guardarMetaSku({ clienteId, anioFiscal: fyMeta, periodo: periodoMeta, marca: it.marca, formato: it.formato, eus });
+      setDetalle((d) => d.map((x) => (x.marca === it.marca && x.formato === it.formato ? { ...x, meta_eus: eus } : x)));
+      onMetaSku(clienteId, it.marca, it.formato, eus, total);
+    } catch (e) {
+      setErrorCarga(e instanceof Error ? e.message : "No se pudo guardar la meta del SKU");
+    } finally {
+      setGuardandoSku((x) => ({ ...x, [k]: false }));
     }
   }
 
@@ -393,7 +414,7 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
   const avancePct = metaActual > 0 ? Math.min(100, (pedidosTotal / metaActual) * 100) : null;
 
   return (
-    <aside className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[560px] flex-col border-l border-gray-200 bg-white shadow-2xl">
+    <aside className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-[560px] flex-col border-l border-gray-200 bg-white shadow-2xl">
       {/* ---- Cabecera ---- */}
       <div className="border-b border-gray-100 px-5 pb-3 pt-4">
         <div className="flex items-start justify-between gap-3">
@@ -486,8 +507,8 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
                 <thead>
                   <tr className="border-b border-gray-100 text-[10px] text-gray-400">
                     <th className="py-1.5 text-left font-medium">SKU</th>
-                    <th className="py-1.5 text-right font-medium">{etiquetas.a}</th>
-                    <th className="py-1.5 text-right font-medium">{etiquetas.b}</th>
+                    <th className="hidden py-1.5 text-right font-medium sm:table-cell">{etiquetas.a}</th>
+                    <th className="hidden py-1.5 text-right font-medium sm:table-cell">{etiquetas.b}</th>
                     <th className="py-1.5 text-right font-medium">{etiquetas.c}</th>
                     <th className="py-1.5 text-right font-medium">{etiquetas.d} LY</th>
                     <th className="py-1.5 text-right font-medium text-verde">Meta</th>
@@ -507,19 +528,33 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
                           </span>
                         )}
                       </td>
-                      <td className="py-1.5 text-right text-gray-600">{formatEUs(Number(it.eus_a))}</td>
-                      <td className="py-1.5 text-right text-gray-600">{formatEUs(Number(it.eus_b))}</td>
+                      <td className="hidden py-1.5 text-right text-gray-600 sm:table-cell">{formatEUs(Number(it.eus_a))}</td>
+                      <td className="hidden py-1.5 text-right text-gray-600 sm:table-cell">{formatEUs(Number(it.eus_b))}</td>
                       <td className="py-1.5 text-right text-gray-600">{formatEUs(Number(it.eus_c))}</td>
                       <td className="py-1.5 text-right text-gray-400">{formatEUs(Number(it.eus_d))}</td>
-                      <td className="py-1.5 text-right font-medium text-verde">{Number(it.meta_eus) > 0 ? formatEUs(Number(it.meta_eus)) : "—"}</td>
+                      <td className="py-1.5 pl-2 text-right">
+                        {fila.es_otros ? (
+                          <span className="font-medium text-verde">{Number(it.meta_eus) > 0 ? formatEUs(Number(it.meta_eus)) : "—"}</span>
+                        ) : (
+                          <input
+                            value={metaSkuEdits[`${it.marca}|${it.formato}`] ?? (Number(it.meta_eus) > 0 ? String(Math.round(Number(it.meta_eus))) : "")}
+                            onChange={(e) => setMetaSkuEdits((m) => ({ ...m, [`${it.marca}|${it.formato}`]: e.target.value }))}
+                            onBlur={() => guardarMetaSkuPanel(it)}
+                            placeholder="—"
+                            inputMode="decimal"
+                            title="Meta de este SKU (EUs). Al guardar, la meta total pasa a ser la suma de los SKU."
+                            className={`w-16 rounded-md border border-gray-200 px-1.5 py-0.5 text-right text-xs font-medium text-verde outline-none focus:border-verde ${guardandoSku[`${it.marca}|${it.formato}`] ? "opacity-50" : ""}`}
+                          />
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="text-[11px] font-medium text-gray-700">
                     <td className="pt-2">Total</td>
-                    <td className="pt-2 text-right">{formatEUs(totales.a)}</td>
-                    <td className="pt-2 text-right">{formatEUs(totales.b)}</td>
+                    <td className="hidden pt-2 text-right sm:table-cell">{formatEUs(totales.a)}</td>
+                    <td className="hidden pt-2 text-right sm:table-cell">{formatEUs(totales.b)}</td>
                     <td className="pt-2 text-right">{formatEUs(totales.c)}</td>
                     <td className="pt-2 text-right text-gray-400">{formatEUs(totales.d)}</td>
                     <td className="pt-2 text-right text-verde">{sumaSku > 0 ? formatEUs(sumaSku) : "—"}</td>
@@ -528,7 +563,8 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
               </table>
             )}
             <p className="mt-3 text-[10px] text-gray-400">
-              Señales: <b>compraba LY</b> = tenía compra el mismo mes del año pasado y nada en los últimos 3 meses ·{" "}
+              La columna Meta se edita aquí mismo (EUs por SKU). En pantalla chica se ocultan {etiquetas.a} y {etiquetas.b}; gira el teléfono para verlos.
+              {" "}Señales: <b>compraba LY</b> = tenía compra el mismo mes del año pasado y nada en los últimos 3 meses ·{" "}
               <b>cae vs LY</b> = promedio de los últimos 3 meses bajo dos tercios del LY · <b>nuevo</b> = compra este año sin LY.
             </p>
           </div>

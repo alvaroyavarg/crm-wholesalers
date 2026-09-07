@@ -283,7 +283,73 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
         <span className="ml-auto text-xs text-gray-400">{visibles.length} de {filas.length}</span>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* ---- Móvil: tarjetas (la tabla de 12 columnas no cabe) ---- */}
+      <ul className="divide-y divide-gray-100 lg:hidden">
+        {visibles.map((f) => {
+          const edicion = valorEdicion(f);
+          return (
+            <li key={f.cliente_id} className={`px-4 py-3 ${f.es_otros ? "bg-gray-50/40" : ""}`}>
+              <div className="flex items-start justify-between gap-2">
+                <button onClick={() => setPanelId(f.cliente_id)} className="min-w-0 text-left">
+                  <span className={`block truncate font-medium ${panelId === f.cliente_id ? "text-verde" : "text-gray-900"}`}>
+                    {f.nombre_corto ?? f.nombre}
+                  </span>
+                  <span className="block truncate text-[11px] text-gray-500">
+                    {f.es_otros ? "Otros · " : f.cod_diageo ? `${f.cod_diageo} · ` : ""}
+                    {etiquetaBottler(f.bottler)}
+                    {f.zona ? ` · ${f.zona}` : ""}
+                    {f.desarrollador ? ` · ${f.desarrollador}` : ""}
+                  </span>
+                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  {f.segmento === "TOP3" && !f.es_otros && <Chip variante="azul">TOP3</Chip>}
+                  {f.es_frontera && <Chip variante="ambar">frontera</Chip>}
+                  <button onClick={() => setPanelId(f.cliente_id)} className="rounded-lg px-2 py-1 text-gray-400 hover:text-gray-700" title="Abrir panel">
+                    ›
+                  </button>
+                </div>
+              </div>
+              <div className="mt-2 grid grid-cols-4 gap-1 text-center">
+                {([["a", f.eus_a], ["b", f.eus_b], ["c", f.eus_c], ["d", f.eus_d]] as const).map(([k, v]) => (
+                  <div key={k} className="rounded-md bg-gray-50 py-1">
+                    <p className="text-[10px] text-gray-400">{etiquetas[k]}{k === "d" ? " LY" : ""}</p>
+                    <p className={`text-xs ${k === "d" ? "text-gray-500" : "text-gray-800"}`}>{formatEUs(Number(v))}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <label className="flex flex-1 items-center gap-1.5 whitespace-nowrap text-[11px] text-gray-500">
+                  Meta EUs
+                  <input
+                    value={edicion.eus}
+                    onChange={(e) => cambiarEus(f.cliente_id, e.target.value)}
+                    onBlur={() => guardarTotal(f.cliente_id)}
+                    placeholder="—"
+                    inputMode="decimal"
+                    className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1 text-right text-sm outline-none focus:border-verde"
+                  />
+                </label>
+                <label className="flex flex-1 items-center gap-1.5 text-[11px] text-gray-500">
+                  UC
+                  <input
+                    value={edicion.uc}
+                    onChange={(e) => cambiarUc(f.cliente_id, e.target.value)}
+                    onBlur={() => guardarTotal(f.cliente_id)}
+                    placeholder="—"
+                    inputMode="decimal"
+                    className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1 text-right text-sm outline-none focus:border-verde"
+                  />
+                </label>
+                {guardando[f.cliente_id] && <span className="text-[10px] text-gray-400">…</span>}
+              </div>
+            </li>
+          );
+        })}
+        {visibles.length === 0 && <li className="px-4 py-6 text-center text-xs text-gray-400">Sin clientes con esos filtros.</li>}
+      </ul>
+
+      {/* ---- Escritorio: tabla completa ---- */}
+      <div className="hidden overflow-x-auto lg:block">
         <table className="w-full min-w-[1180px] text-sm">
           <thead>
             <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
