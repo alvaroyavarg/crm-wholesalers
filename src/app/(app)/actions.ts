@@ -364,6 +364,8 @@ export async function obtenerDetalleMeta(
   periodoB: number,
   fyC: number,
   periodoC: number,
+  fyMeta: number,
+  periodoMeta: number,
 ) {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("detalle_meta_cliente", {
@@ -374,7 +376,78 @@ export async function obtenerDetalleMeta(
     p_periodo_b: periodoB,
     p_fy_c: fyC,
     p_periodo_c: periodoC,
+    p_fy_meta: fyMeta,
+    p_periodo_meta: periodoMeta,
   });
   if (error) throw new Error(`detalle_meta_cliente: ${error.message}`);
   return (data ?? []) as DetalleMetaItem[];
+}
+
+// ---- Meta por SKU ----
+// Guarda la meta de un SKU y recalcula la meta total del cliente como la
+// suma de sus SKUs (plan_ventas sigue siendo la fuente que leen el
+// dashboard, MTD y Plan). Devuelve la nueva meta total.
+export async function guardarMetaSku(input: {
+  clienteId: string;
+  anioFiscal: number;
+  periodo: number;
+  marca: string;
+  formato: string;
+  eus: number;
+}) {
+  const eus = Number.isFinite(input.eus) && input.eus > 0 ? input.eus : 0;
+  const supabase = await createClient();
+
+  if (eus === 0) {
+    const { error } = await supabase
+      .from("plan_ventas_sku")
+      .delete()
+      .match({
+        cliente_id: input.clienteId,
+        anio_fiscal: input.anioFiscal,
+        periodo: input.periodo,
+        marca: input.marca,
+        formato: input.formato,
+      });
+    if (error) throw new Error(`plan_ventas_sku: ${error.message}`);
+  } else {
+    const { error } = await supabase.from("plan_ventas_sku").upsert(
+      {
+        cliente_id: input.clienteId,
+        anio_fiscal: input.anioFiscal,
+        periodo: input.periodo,
+        marca: input.marca,
+        formato: input.formato,
+        eus_plan: eus,
+        actualizado_at: new Date().toISOString(),
+      },
+      { onConflict: "cliente_id,anio_fiscal,periodo,marca,formato" },
+    );
+    if (error) throw new Error(`plan_ventas_sku: ${error.message}`);
+  }
+
+  const { data: filas, error: errSum } = await supabase
+    .from("plan_ventas_sku")
+    .select("eus_plan")
+    .match({ cliente_id: input.clienteId, anio_fiscal: input.anioFiscal, periodo: input.periodo });
+  if (errSum) throw new Error(`plan_ventas_sku: ${errSum.message}`);
+  const total = (filas ?? []).reduce((s, f) => s + Number(f.eus_plan), 0);
+
+  const { error: errPlan } = await supabase.from("plan_ventas").upsert(
+    {
+      cliente_id: input.clienteId,
+      anio_fiscal: input.anioFiscal,
+      periodo: input.periodo,
+      eus_plan: total,
+      actualizado_at: new Date().toISOString(),
+    },
+    { onConflict: "cliente_id,anio_fiscal,periodo" },
+  );
+  if (errPlan) throw new Error(`plan_ventas: ${errPlan.message}`);
+
+  revalidatePath("/meta");
+  revalidatePath("/mtd");
+  revalidatePath("/plan");
+  revalidatePath("/");
+  return total;
 }

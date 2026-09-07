@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const periodo = periodoParam ? Number(periodoParam) : undefined;
 
   const { fyMeta, periodoMeta, columnas, clientes } = await metaProximoMes(fy, periodo);
-  const detalle = await detalleMetaTodos(columnas.a, columnas.b, columnas.c);
+  const detalle = await detalleMetaTodos(columnas.a, columnas.b, columnas.c, { fy: fyMeta, periodo: periodoMeta });
 
   const etA = etiquetaMesCalendario(columnas.a.fy, columnas.a.periodo);
   const etB = etiquetaMesCalendario(columnas.b.fy, columnas.b.periodo);
@@ -37,9 +37,11 @@ export async function GET(request: Request) {
   const filasResumen = clientes.map((c) => ({
     "ID cliente": c.cod_diageo ?? "",
     Cliente: c.nombre_corto ?? c.nombre,
-    Segmento: c.segmento,
+    Segmento: c.es_otros ? "Otros" : c.segmento,
     Distribuidor:
       etiquetaBottler(c.bottler) + (c.es_frontera ? " (frontera)" : ""),
+    Zona: c.zona ?? "",
+    Desarrollador: c.desarrollador ?? "",
     [etA]: Math.round(Number(c.eus_a)),
     [etB]: Math.round(Number(c.eus_b)),
     [etC]: Math.round(Number(c.eus_c)),
@@ -57,12 +59,13 @@ export async function GET(request: Request) {
     [etA]: Math.round(Number(d.eus_a)),
     [etB]: Math.round(Number(d.eus_b)),
     [etC]: Math.round(Number(d.eus_c)),
+    "Meta SKU EUS": Math.round(Number(d.meta_eus)),
   }));
 
   const wb = XLSX.utils.book_new();
   const hojaResumen = XLSX.utils.json_to_sheet(filasResumen);
   hojaResumen["!cols"] = [
-    { wch: 12 }, { wch: 24 }, { wch: 10 }, { wch: 16 },
+    { wch: 12 }, { wch: 24 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 14 },
     { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
   ];
   XLSX.utils.book_append_sheet(wb, hojaResumen, "Resumen");

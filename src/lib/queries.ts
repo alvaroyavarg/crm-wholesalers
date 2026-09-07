@@ -22,6 +22,7 @@ import type {
   Recomendacion,
   ResumenCliente,
   SeriePeriodoRow,
+  SkuCatalogo,
 } from "./types";
 
 export async function resumenCartera() {
@@ -331,6 +332,7 @@ export async function detalleMetaTodos(
   colA: { fy: number; periodo: number },
   colB: { fy: number; periodo: number },
   colC: { fy: number; periodo: number },
+  meta: { fy: number; periodo: number },
 ) {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("detalle_meta_todos", {
@@ -340,7 +342,17 @@ export async function detalleMetaTodos(
     p_periodo_b: colB.periodo,
     p_fy_c: colC.fy,
     p_periodo_c: colC.periodo,
+    p_fy_meta: meta.fy,
+    p_periodo_meta: meta.periodo,
   });
   if (error) throw new Error(`detalle_meta_todos: ${error.message}`);
   return (data ?? []) as DetalleMetaTodosRow[];
+}
+
+// Catálogo de SKUs conocidos (marca + formato) para agregar metas por SKU.
+export async function catalogoSkus() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("catalogo_skus");
+  if (error) throw new Error(`catalogo_skus: ${error.message}`);
+  return (data ?? []) as SkuCatalogo[];
 }

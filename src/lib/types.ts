@@ -233,10 +233,14 @@ export interface MetaClienteRow {
   cod_diageo: string | null;
   bottler: string | null;
   es_frontera: boolean;
+  zona: string | null;
+  desarrollador: string | null;
+  es_otros: boolean;
   eus_a: number;
   eus_b: number;
   eus_c: number;
   meta_eus: number;
+  meta_sku_eus: number; // suma de plan_ventas_sku (0 si no hay desglose)
 }
 
 // Item del RPC detalle_meta_cliente (drill-down por SKU, un cliente)
@@ -247,6 +251,13 @@ export interface DetalleMetaItem {
   eus_a: number;
   eus_b: number;
   eus_c: number;
+  meta_eus: number; // meta por SKU para el período meta (0 si no hay)
+}
+
+export interface SkuCatalogo {
+  marca: string;
+  formato: string;
+  categoria: string;
 }
 
 // Fila del RPC detalle_meta_todos (para exportar a Excel: toda la cartera)

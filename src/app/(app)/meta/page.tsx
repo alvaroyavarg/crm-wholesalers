@@ -5,7 +5,7 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { TablaMetaProximoMes } from "@/components/meta/TablaMetaProximoMes";
 import { etiquetaMesCalendario, fiscalActual, sumarPeriodos } from "@/lib/fiscal";
 import { formatEUs } from "@/lib/metrics";
-import { metaProximoMes } from "@/lib/queries";
+import { catalogoSkus, metaProximoMes } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +22,10 @@ export default async function MetaPage({
   const fyParam = sp.fy ? Number(sp.fy) : undefined;
   const periodoParam = sp.periodo ? Number(sp.periodo) : undefined;
 
-  const { fyMeta, periodoMeta, columnas, clientes } = await metaProximoMes(
-    fyParam,
-    periodoParam,
-  );
+  const [{ fyMeta, periodoMeta, columnas, clientes }, catalogo] = await Promise.all([
+    metaProximoMes(fyParam, periodoParam),
+    catalogoSkus(),
+  ]);
 
   const mesAnterior = sumarPeriodos(fyMeta, periodoMeta, -1);
   const mesSiguiente = sumarPeriodos(fyMeta, periodoMeta, 1);
@@ -61,7 +61,7 @@ export default async function MetaPage({
           </h1>
           <p className="mt-0.5 text-sm text-gray-500">
             Tendencia de {etiquetas.a} y {etiquetas.b} + {etiquetas.c} (mismo mes LY) ·
-            cartera activa ({clientes.length} cuentas)
+            cartera activa ({clientes.filter((c) => !c.es_otros).length} cuentas + Otros por bottler)
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -127,7 +127,7 @@ export default async function MetaPage({
           <p className="text-sm font-medium text-gray-700">
             Trabajar la meta por cuenta
             <span className="ml-2 text-xs font-normal text-gray-400">
-              clic en el nombre o la flecha para ver la compra por SKU
+              clic en el nombre o la flecha: compra por SKU y meta por SKU
             </span>
           </p>
           <div className="flex items-center gap-2">
@@ -151,6 +151,7 @@ export default async function MetaPage({
             periodoMeta={periodoMeta}
             etiquetas={etiquetas}
             periodos={columnas}
+            catalogo={catalogo}
           />
         </div>
         <p className="px-5 pb-4 pt-2 text-[11px] text-gray-400">
