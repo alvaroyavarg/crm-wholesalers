@@ -288,8 +288,8 @@ export async function mtdCompleto() {
 // ---- Meta del próximo mes ----
 
 // Tabla de trabajo para fijar la meta de un mes: por defecto el que sigue al
-// actual (hoy Ago-26 → propone Sept-26), con 2 columnas de tendencia
-// reciente (los 2 meses anteriores al objetivo) + el mismo mes LY.
+// actual (hoy Sept-26), con 3 columnas de tendencia reciente (los 3 meses
+// anteriores al objetivo: a, b, c) + el mismo mes LY (d).
 // fyParam/periodoParam permiten navegar a otro mes objetivo (prev/next).
 export async function metaProximoMes(fyParam?: number, periodoParam?: number) {
   const supabase = await createClient();
@@ -301,9 +301,10 @@ export async function metaProximoMes(fyParam?: number, periodoParam?: number) {
   const meta =
     fyParam != null && periodoParam != null ? { fy: fyParam, periodo: periodoParam } : { fy, periodo };
 
-  const colA = sumarPeriodos(meta.fy, meta.periodo, -2);
-  const colB = sumarPeriodos(meta.fy, meta.periodo, -1);
-  const colC = { fy: meta.fy - 1, periodo: meta.periodo };
+  const colA = sumarPeriodos(meta.fy, meta.periodo, -3);
+  const colB = sumarPeriodos(meta.fy, meta.periodo, -2);
+  const colC = sumarPeriodos(meta.fy, meta.periodo, -1);
+  const colD = { fy: meta.fy - 1, periodo: meta.periodo };
 
   const { data, error } = await supabase.rpc("resumen_meta_periodo", {
     p_fy_a: colA.fy,
@@ -312,6 +313,8 @@ export async function metaProximoMes(fyParam?: number, periodoParam?: number) {
     p_periodo_b: colB.periodo,
     p_fy_c: colC.fy,
     p_periodo_c: colC.periodo,
+    p_fy_d: colD.fy,
+    p_periodo_d: colD.periodo,
     p_fy_meta: meta.fy,
     p_periodo_meta: meta.periodo,
   });
@@ -320,7 +323,7 @@ export async function metaProximoMes(fyParam?: number, periodoParam?: number) {
   return {
     fyMeta: meta.fy,
     periodoMeta: meta.periodo,
-    columnas: { a: colA, b: colB, c: colC },
+    columnas: { a: colA, b: colB, c: colC, d: colD },
     clientes: (data ?? []) as MetaClienteRow[],
   };
 }
@@ -332,6 +335,7 @@ export async function detalleMetaTodos(
   colA: { fy: number; periodo: number },
   colB: { fy: number; periodo: number },
   colC: { fy: number; periodo: number },
+  colD: { fy: number; periodo: number },
   meta: { fy: number; periodo: number },
 ) {
   const supabase = await createClient();
@@ -342,6 +346,8 @@ export async function detalleMetaTodos(
     p_periodo_b: colB.periodo,
     p_fy_c: colC.fy,
     p_periodo_c: colC.periodo,
+    p_fy_d: colD.fy,
+    p_periodo_d: colD.periodo,
     p_fy_meta: meta.fy,
     p_periodo_meta: meta.periodo,
   });

@@ -364,6 +364,8 @@ export async function obtenerDetalleMeta(
   periodoB: number,
   fyC: number,
   periodoC: number,
+  fyD: number,
+  periodoD: number,
   fyMeta: number,
   periodoMeta: number,
 ) {
@@ -376,6 +378,8 @@ export async function obtenerDetalleMeta(
     p_periodo_b: periodoB,
     p_fy_c: fyC,
     p_periodo_c: periodoC,
+    p_fy_d: fyD,
+    p_periodo_d: periodoD,
     p_fy_meta: fyMeta,
     p_periodo_meta: periodoMeta,
   });

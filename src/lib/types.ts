@@ -239,6 +239,7 @@ export interface MetaClienteRow {
   eus_a: number;
   eus_b: number;
   eus_c: number;
+  eus_d: number; // mismo mes del año anterior
   meta_eus: number;
   meta_sku_eus: number; // suma de plan_ventas_sku (0 si no hay desglose)
 }
@@ -251,6 +252,7 @@ export interface DetalleMetaItem {
   eus_a: number;
   eus_b: number;
   eus_c: number;
+  eus_d: number;
   meta_eus: number; // meta por SKU para el período meta (0 si no hay)
 }
 

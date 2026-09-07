@@ -24,11 +24,12 @@ export async function GET(request: Request) {
   const periodo = periodoParam ? Number(periodoParam) : undefined;
 
   const { fyMeta, periodoMeta, columnas, clientes } = await metaProximoMes(fy, periodo);
-  const detalle = await detalleMetaTodos(columnas.a, columnas.b, columnas.c, { fy: fyMeta, periodo: periodoMeta });
+  const detalle = await detalleMetaTodos(columnas.a, columnas.b, columnas.c, columnas.d, { fy: fyMeta, periodo: periodoMeta });
 
   const etA = etiquetaMesCalendario(columnas.a.fy, columnas.a.periodo);
   const etB = etiquetaMesCalendario(columnas.b.fy, columnas.b.periodo);
-  const etC = `${etiquetaMesCalendario(columnas.c.fy, columnas.c.periodo)} (LY)`;
+  const etC = etiquetaMesCalendario(columnas.c.fy, columnas.c.periodo);
+  const etD = `${etiquetaMesCalendario(columnas.d.fy, columnas.d.periodo)} (LY)`;
   const etiquetaMeta = etiquetaMesCalendario(fyMeta, periodoMeta);
 
   const etiquetaBottler = (b: string | null) =>
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
     [etA]: Math.round(Number(c.eus_a)),
     [etB]: Math.round(Number(c.eus_b)),
     [etC]: Math.round(Number(c.eus_c)),
+    [etD]: Math.round(Number(c.eus_d)),
     "Meta EUS": Math.round(Number(c.meta_eus)),
     "Meta UC": Number(c.meta_eus) > 0
       ? Number((Number(c.meta_eus) / FACTOR_UC_EU).toFixed(1))
@@ -59,6 +61,7 @@ export async function GET(request: Request) {
     [etA]: Math.round(Number(d.eus_a)),
     [etB]: Math.round(Number(d.eus_b)),
     [etC]: Math.round(Number(d.eus_c)),
+    [etD]: Math.round(Number(d.eus_d)),
     "Meta SKU EUS": Math.round(Number(d.meta_eus)),
   }));
 
@@ -66,14 +69,14 @@ export async function GET(request: Request) {
   const hojaResumen = XLSX.utils.json_to_sheet(filasResumen);
   hojaResumen["!cols"] = [
     { wch: 12 }, { wch: 24 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 14 },
-    { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
+    { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
   ];
   XLSX.utils.book_append_sheet(wb, hojaResumen, "Resumen");
 
   const hojaDetalle = XLSX.utils.json_to_sheet(filasDetalle);
   hojaDetalle["!cols"] = [
     { wch: 24 }, { wch: 16 }, { wch: 20 }, { wch: 12 },
-    { wch: 10 }, { wch: 10 }, { wch: 12 },
+    { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
   ];
   XLSX.utils.book_append_sheet(wb, hojaDetalle, "Detalle SKU");
 

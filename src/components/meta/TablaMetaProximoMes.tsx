@@ -9,18 +9,19 @@ import type { DetalleMetaItem, MetaClienteRow, SkuCatalogo } from "@/lib/types";
 
 type Columna =
   | "cod" | "bottler" | "zona" | "desarrollador" | "nombre"
-  | "eus_a" | "eus_b" | "eus_c" | "meta_eus";
-type ColumnaDetalle = "sku" | "eus_a" | "eus_b" | "eus_c" | "meta_eus";
+  | "eus_a" | "eus_b" | "eus_c" | "eus_d" | "meta_eus";
+type ColumnaDetalle = "sku" | "eus_a" | "eus_b" | "eus_c" | "eus_d" | "meta_eus";
 
 interface Props {
   filas: MetaClienteRow[];
   fyMeta: number;
   periodoMeta: number;
-  etiquetas: { a: string; b: string; c: string };
+  etiquetas: { a: string; b: string; c: string; d: string };
   periodos: {
     a: { fy: number; periodo: number };
     b: { fy: number; periodo: number };
     c: { fy: number; periodo: number };
+    d: { fy: number; periodo: number };
   };
   catalogo: SkuCatalogo[];
 }
@@ -33,7 +34,7 @@ interface EdicionMeta {
   uc: string;
 }
 
-const NUM_COLS = 11; // chevron + 8 columnas + Meta UC + (Meta ya está en columnas)
+const NUM_COLS = 12; // chevron + 10 columnas (incl. Meta) + Meta UC
 
 function etiquetaBottler(b: string | null): string {
   return b === "KOA" ? "Andina" : b === "KOE" ? "Embonor" : "—";
@@ -126,6 +127,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
         periodos.a.fy, periodos.a.periodo,
         periodos.b.fy, periodos.b.periodo,
         periodos.c.fy, periodos.c.periodo,
+        periodos.d.fy, periodos.d.periodo,
         fyMeta, periodoMeta,
       );
       setDetalle((p) => ({ ...p, [clienteId]: items }));
@@ -166,7 +168,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
     setDetalle((p) => {
       const items = Array.isArray(p[clienteId]) ? (p[clienteId] as DetalleMetaItem[]) : [];
       if (items.some((it) => it.marca === marca && it.formato === formato)) return p;
-      return { ...p, [clienteId]: [{ categoria: cat?.categoria ?? "", marca, formato, eus_a: 0, eus_b: 0, eus_c: 0, meta_eus: 0 }, ...items] };
+      return { ...p, [clienteId]: [{ categoria: cat?.categoria ?? "", marca, formato, eus_a: 0, eus_b: 0, eus_c: 0, eus_d: 0, meta_eus: 0 }, ...items] };
     });
     setNuevoSku((p) => ({ ...p, [clienteId]: "" }));
   }
@@ -180,7 +182,8 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
     { col: "nombre", etiqueta: "Cliente" },
     { col: "eus_a", etiqueta: etiquetas.a, alinear: "right" },
     { col: "eus_b", etiqueta: etiquetas.b, alinear: "right" },
-    { col: "eus_c", etiqueta: `${etiquetas.c} (LY)`, alinear: "right" },
+    { col: "eus_c", etiqueta: etiquetas.c, alinear: "right" },
+    { col: "eus_d", etiqueta: `${etiquetas.d} (LY)`, alinear: "right" },
     { col: "meta_eus", etiqueta: "Meta", alinear: "right" },
   ];
   function valor(f: MetaClienteRow, col: Columna): number | string {
@@ -323,7 +326,8 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                     </td>
                     <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_a)}</td>
                     <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_b)}</td>
-                    <td className="px-3 py-3 text-right text-gray-500">{formatEUs(f.eus_c)}</td>
+                    <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_c)}</td>
+                    <td className="px-3 py-3 text-right text-gray-500">{formatEUs(f.eus_d)}</td>
                     <td className="px-3 py-3 text-right">
                       <input
                         value={edicion.eus}
@@ -360,7 +364,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                     <>
                       <tr className="bg-gray-50/60 text-[11px] text-gray-400">
                         <td /><td /><td /><td /><td />
-                        {([["sku", "SKU"], ["eus_a", etiquetas.a], ["eus_b", etiquetas.b], ["eus_c", `${etiquetas.c} (LY)`], ["meta_eus", "Meta SKU"]] as [ColumnaDetalle, string][]).map(([col, et]) => (
+                        {([["sku", "SKU"], ["eus_a", etiquetas.a], ["eus_b", etiquetas.b], ["eus_c", etiquetas.c], ["eus_d", `${etiquetas.d} (LY)`], ["meta_eus", "Meta SKU"]] as [ColumnaDetalle, string][]).map(([col, et]) => (
                           <td key={col} onClick={() => ordenarDetalle(col)} className={`cursor-pointer select-none px-3 py-1.5 font-medium hover:text-gray-600 ${col === "sku" ? "" : "text-right"}`}>
                             {et}{indicador(ordenDet === col, ascDet)}
                           </td>
@@ -383,7 +387,8 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                               </td>
                               <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_a)}</td>
                               <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_b)}</td>
-                              <td className="px-3 py-1.5 text-right text-gray-400">{formatEUs(it.eus_c)}</td>
+                              <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_c)}</td>
+                              <td className="px-3 py-1.5 text-right text-gray-400">{formatEUs(it.eus_d)}</td>
                               <td className="px-3 py-1.5 text-right">
                                 <input
                                   value={txt}
@@ -401,7 +406,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                         })}
                       <tr className="bg-gray-50/60 text-xs">
                         <td /><td /><td /><td /><td />
-                        <td colSpan={6} className="px-3 py-2">
+                        <td colSpan={7} className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             <select value={nuevoSku[f.cliente_id] ?? ""} onChange={(e) => setNuevoSku((p) => ({ ...p, [f.cliente_id]: e.target.value }))} className={selectCls}>
                               <option value="">+ Agregar SKU a la meta…</option>

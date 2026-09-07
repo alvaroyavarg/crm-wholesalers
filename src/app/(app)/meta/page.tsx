@@ -42,12 +42,14 @@ export default async function MetaPage({
     a: etiquetaMesCalendario(columnas.a.fy, columnas.a.periodo),
     b: etiquetaMesCalendario(columnas.b.fy, columnas.b.periodo),
     c: etiquetaMesCalendario(columnas.c.fy, columnas.c.periodo),
+    d: etiquetaMesCalendario(columnas.d.fy, columnas.d.periodo),
   };
   const etiquetaMeta = etiquetaMesCalendario(fyMeta, periodoMeta);
 
   const totalA = clientes.reduce((a, c) => a + Number(c.eus_a), 0);
   const totalB = clientes.reduce((a, c) => a + Number(c.eus_b), 0);
   const totalC = clientes.reduce((a, c) => a + Number(c.eus_c), 0);
+  const totalD = clientes.reduce((a, c) => a + Number(c.eus_d), 0);
   const totalMeta = clientes.reduce((a, c) => a + Number(c.meta_eus), 0);
   const conMeta = clientes.filter((c) => Number(c.meta_eus) > 0).length;
   const sinMeta = clientes.length - conMeta;
@@ -60,7 +62,7 @@ export default async function MetaPage({
             Meta de {etiquetaMeta}
           </h1>
           <p className="mt-0.5 text-sm text-gray-500">
-            Tendencia de {etiquetas.a} y {etiquetas.b} + {etiquetas.c} (mismo mes LY) ·
+            Tendencia de {etiquetas.a}, {etiquetas.b} y {etiquetas.c} + {etiquetas.d} (mismo mes LY) ·
             cartera activa ({clientes.filter((c) => !c.es_otros).length} cuentas + Otros por bottler)
           </p>
         </div>
@@ -100,13 +102,14 @@ export default async function MetaPage({
         </div>
       </div>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard icono="📦" etiqueta={etiquetas.a} valor={`${formatEUs(totalA)} EUs`} />
         <KpiCard icono="📦" etiqueta={etiquetas.b} valor={`${formatEUs(totalB)} EUs`} />
+        <KpiCard icono="📦" etiqueta={etiquetas.c} valor={`${formatEUs(totalC)} EUs`} />
         <KpiCard
           icono="📦"
-          etiqueta={`${etiquetas.c} (LY)`}
-          valor={`${formatEUs(totalC)} EUs`}
+          etiqueta={`${etiquetas.d} (LY)`}
+          valor={`${formatEUs(totalD)} EUs`}
         />
         <KpiCard
           icono="🎯"
