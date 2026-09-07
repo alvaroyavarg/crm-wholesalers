@@ -346,7 +346,7 @@ export async function getHistoriaSkuMeta(
       p_fy_meta: fyMeta, p_periodo_meta: periodoMeta,
     }),
     supabase.from("plan_ventas").select("eus_plan").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta).maybeSingle(),
-    supabase.from("pedidos").select("fecha, marca, formato, eus, estado").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
+    supabase.from("pedidos").select("fecha, marca, formato, eus, estado, precio_botella, comentario").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
   ]);
   if (detRes.error) return { error: detRes.error.message };
 
@@ -374,7 +374,7 @@ export async function getHistoriaSkuMeta(
   });
 
   const metaSku = items.reduce((s, it) => s + Number(it.meta_sku_eus), 0);
-  const pedidos = (pedRes.data ?? []) as { fecha: string; marca: string; formato: string; eus: number; estado: string }[];
+  const pedidos = (pedRes.data ?? []) as { fecha: string; marca: string; formato: string; eus: number; estado: string; precio_botella: number | null; comentario: string | null }[];
 
   return {
     cliente: cliRes.data?.nombre_corto ?? cliRes.data?.nombre,
@@ -388,7 +388,11 @@ export async function getHistoriaSkuMeta(
     total_3m_promedio: r0(items.reduce((s, it) => s + Number(it.promedio_3m), 0)),
     total_ly: r0(items.reduce((s, it) => s + Number(it[`${etiquetaMesCalendario(d.fy, d.periodo)} (LY)`]), 0)),
     skus: items,
-    pedidos_registrados: pedidos.map((p) => ({ ...p, eus: r0(Number(p.eus)) })),
+    pedidos_registrados: pedidos.map((p) => ({
+      ...p,
+      eus: r0(Number(p.eus)),
+      precio_botella_clp: p.precio_botella != null ? r0(Number(p.precio_botella)) : null,
+    })),
   };
 }
 

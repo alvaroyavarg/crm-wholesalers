@@ -146,6 +146,7 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
   const [pCantidad, setPCantidad] = useState("");
   const [pUnidad, setPUnidad] = useState<"UC" | "EU">("UC");
   const [pEstado, setPEstado] = useState<EstadoPedido>("ingresado");
+  const [pPrecio, setPPrecio] = useState("");
   const [pComentario, setPComentario] = useState("");
   const [guardandoPedido, setGuardandoPedido] = useState(false);
   const [errorPedido, setErrorPedido] = useState("");
@@ -384,10 +385,12 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
         cantidad: cantidadNum,
         unidad: pUnidad,
         estado: pEstado,
+        precioBotella: pPrecio.trim() ? Number(pPrecio.replace(/\./g, "").replace(",", ".")) : null,
         comentario: pComentario,
       });
       if (nuevo.anio_fiscal === fyMeta && nuevo.periodo === periodoMeta) setPedidos((p) => [nuevo, ...p]);
       setPCantidad("");
+      setPPrecio("");
       setPComentario("");
     } catch (e) {
       setErrorPedido(e instanceof Error ? e.message : "Error al guardar");
@@ -798,6 +801,13 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
                   )}
                 </label>
                 <label className="text-[11px] text-gray-500">
+                  Precio acordado (por botella)
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-gray-400">$</span>
+                    <input value={pPrecio} onChange={(e) => setPPrecio(e.target.value)} inputMode="numeric" placeholder="opcional" className={inputCls} />
+                  </div>
+                </label>
+                <label className="col-span-2 text-[11px] text-gray-500">
                   Comentario
                   <input value={pComentario} onChange={(e) => setPComentario(e.target.value)} placeholder="opcional" className={inputCls} />
                 </label>
@@ -827,6 +837,7 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
                         </p>
                         <p className="text-[10px] text-gray-400">
                           {fechaCorta(p.fecha)}
+                          {p.precio_botella != null ? ` · $${Math.round(Number(p.precio_botella)).toLocaleString("es-CL")}/bot.` : ""}
                           {p.comentario ? ` · ${p.comentario}` : ""}
                         </p>
                       </div>

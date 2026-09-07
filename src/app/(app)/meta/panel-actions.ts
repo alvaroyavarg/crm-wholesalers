@@ -207,12 +207,14 @@ export async function crearPedido(input: {
   cantidad: number;
   unidad: "UC" | "EU";
   estado: EstadoPedido;
+  precioBotella: number | null; // CLP por botella (opcional)
   comentario: string;
 }) {
   const supabase = await requerirSesion();
   const marca = input.marca.trim();
   if (!input.clienteId || !marca) throw new Error("Falta el cliente o el SKU del pedido");
   if (!Number.isFinite(input.cantidad) || input.cantidad <= 0) throw new Error("La cantidad debe ser mayor que 0");
+  const precio = input.precioBotella != null && Number.isFinite(input.precioBotella) && input.precioBotella > 0 ? Math.round(input.precioBotella) : null;
 
   const [y, m, d] = input.fecha.split("-").map(Number);
   const fecha = new Date(y, (m || 1) - 1, d || 1);
@@ -235,6 +237,7 @@ export async function crearPedido(input: {
       uc: Math.round(uc * 10) / 10,
       eus: Math.round(eus * 10) / 10,
       estado: input.estado,
+      precio_botella: precio,
       comentario: input.comentario.trim() || null,
     })
     .select("*")

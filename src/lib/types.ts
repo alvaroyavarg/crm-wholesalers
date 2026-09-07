@@ -184,6 +184,7 @@ export interface Pedido {
   uc: number | null;
   eus: number;
   estado: EstadoPedido;
+  precio_botella: number | null; // CLP por botella, acordado
   comentario: string | null;
   creado_at: string;
 }
