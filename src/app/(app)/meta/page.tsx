@@ -1,11 +1,9 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
-import { KpiCard } from "@/components/ui/KpiCard";
-import { KpisAvance, MetaAvanceProvider } from "@/components/meta/MetaAvance";
+import { KpisAvance, KpisTendencia, MetaAvanceProvider } from "@/components/meta/MetaAvance";
 import { TablaMetaProximoMes } from "@/components/meta/TablaMetaProximoMes";
 import { etiquetaMesCalendario, fiscalActual, sumarPeriodos } from "@/lib/fiscal";
-import { formatEUs } from "@/lib/metrics";
 import { catalogoSkus, metaProximoMes } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -107,28 +105,16 @@ export default async function MetaPage({
       {/* Resumen grande: meta, pedidos por estado y brecha (cifras vivas desde la tabla) */}
       <KpisAvance etiquetaMes={etiquetaMeta} />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
-        <KpiCard icono="📦" etiqueta={etiquetas.a} valor={`${formatEUs(totalA)} EUs`} />
-        <KpiCard icono="📦" etiqueta={etiquetas.b} valor={`${formatEUs(totalB)} EUs`} />
-        <KpiCard icono="📦" etiqueta={etiquetas.c} valor={`${formatEUs(totalC)} EUs`} />
-        <KpiCard
-          icono="📦"
-          etiqueta={`${etiquetas.d} (LY)`}
-          valor={`${formatEUs(totalD)} EUs`}
-        />
-        <KpiCard
-          icono="🎯"
-          etiqueta={`Meta ${etiquetaMeta}`}
-          valor={totalMeta > 0 ? `${formatEUs(totalMeta)} EUs` : "—"}
-          detalle={
-            sinMeta > 0 ? (
-              <span className="text-ambar">{sinMeta} cuentas sin meta</span>
-            ) : (
-              <span className="text-verde">todas con meta</span>
-            )
-          }
-        />
-      </div>
+      <KpisTendencia
+        valores={[
+          { etiqueta: etiquetas.a, eus: totalA },
+          { etiqueta: etiquetas.b, eus: totalB },
+          { etiqueta: etiquetas.c, eus: totalC },
+          { etiqueta: `${etiquetas.d} (LY)`, eus: totalD },
+          { etiqueta: `Meta ${etiquetaMeta}`, eus: totalMeta },
+        ]}
+        sinMeta={sinMeta}
+      />
 
       <Card className="p-0">
         <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-5">

@@ -2,11 +2,10 @@
 
 import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { guardarMetaMes, guardarMetaSku, obtenerDetalleMeta } from "@/app/(app)/actions";
-import { usePublicarAvance } from "@/components/meta/MetaAvance";
+import { formatoUnidad, SwitchUnidad, usePublicarAvance, useUnidad } from "@/components/meta/MetaAvance";
 import { PanelCliente } from "@/components/meta/PanelCliente";
 import { Chip } from "@/components/ui/Chip";
 import { FACTOR_UC_EU } from "@/lib/importar/unidades";
-import { formatEUs } from "@/lib/metrics";
 import type { DetalleMetaItem, MetaClienteRow, SkuCatalogo } from "@/lib/types";
 
 type Columna =
@@ -145,6 +144,8 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
     : `Meta − ${DESCUENTOS.filter((d) => descuentos.has(d.col)).map((d) => d.corta).join(" − ")}`;
 
   // Publicar el resumen grande (toda la cartera, con cifras vivas)
+  const { unidad } = useUnidad();
+  const fmt = (n: number) => formatoUnidad(n, unidad);
   const publicar = usePublicarAvance();
   useEffect(() => {
     if (!publicar) return;
@@ -309,7 +310,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
     { col: "eus_b", etiqueta: etiquetas.b, alinear: "right" },
     { col: "eus_c", etiqueta: etiquetas.c, alinear: "right" },
     { col: "eus_d", etiqueta: `${etiquetas.d} (LY)`, alinear: "right" },
-    { col: "meta_eus", etiqueta: "Meta", alinear: "right" },
+    { col: "meta_eus", etiqueta: unidad === "UC" ? "Meta (UC)" : "Meta", alinear: "right" },
     { col: "ped_comprometido", etiqueta: "Comprometido", alinear: "right" },
     { col: "ped_ingresado", etiqueta: "Ingresado", alinear: "right" },
     { col: "facturado", etiqueta: "Facturado", alinear: "right" },
@@ -397,6 +398,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
           </button>
         )}
         <span className="ml-auto text-xs text-gray-400">{visibles.length} de {filas.length}</span>
+        <SwitchUnidad />
         <div className="relative hidden lg:block">
           <button
             onClick={() => setMenuColumnas((v) => !v)}
@@ -455,14 +457,14 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                 {([["a", f.eus_a], ["b", f.eus_b], ["c", f.eus_c], ["d", f.eus_d]] as const).map(([k, v]) => (
                   <div key={k} className="rounded-md bg-gray-50 py-1">
                     <p className="text-[10px] text-gray-400">{etiquetas[k]}{k === "d" ? " LY" : ""}</p>
-                    <p className={`text-xs ${k === "d" ? "text-gray-500" : "text-gray-800"}`}>{formatEUs(Number(v))}</p>
+                    <p className={`text-xs ${k === "d" ? "text-gray-500" : "text-gray-800"}`}>{fmt(Number(v))}</p>
                   </div>
                 ))}
               </div>
               {(() => { const fp = conPedidos(f); const m = Number(edicion.eus) || 0; const fac = facturadoDe(fp); return (fac > 0 || Number(fp.ped_ingresado) > 0 || Number(fp.ped_comprometido) > 0) ? (
                 <p className="mt-1.5 text-[11px] text-gray-500">
-                  Fact. {formatEUs(fac)}{fp.venta_cargada ? " ●" : ""} · Ingr. {formatEUs(fp.ped_ingresado)} · Comp. {formatEUs(fp.ped_comprometido)}
-                  {m > 0 && <span className={`ml-2 font-medium ${brechaDe(fp, m) <= 0 ? "text-verde" : "text-ambar"}`}>brecha {formatEUs(brechaDe(fp, m))}</span>}
+                  Fact. {fmt(fac)}{fp.venta_cargada ? " ●" : ""} · Ingr. {fmt(fp.ped_ingresado)} · Comp. {fmt(fp.ped_comprometido)}
+                  {m > 0 && <span className={`ml-2 font-medium ${brechaDe(fp, m) <= 0 ? "text-verde" : "text-ambar"}`}>brecha {fmt(brechaDe(fp, m))}</span>}
                 </p>
               ) : null; })()}
               <div className="mt-2 flex items-center gap-2">
@@ -541,7 +543,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
               ))}
               {ver("meta_uc") && (
                 <th className="px-3 py-3 text-right font-medium" title="Meta en cajas del bottler (UC), derivada con el factor estándar EU = UC × 5,678/9">
-                  Meta UC
+                  {unidad === "UC" ? "Meta (EU)" : "Meta UC"}
                 </th>
               )}
             </tr>
@@ -590,14 +592,14 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                         <span className="ml-2 align-middle"><Chip variante="azul">TOP3</Chip></span>
                       ) : null}
                     </td>
-                    {ver("eus_a") && <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_a)}</td>}
-                    {ver("eus_b") && <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_b)}</td>}
-                    {ver("eus_c") && <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_c)}</td>}
-                    {ver("eus_d") && <td className="px-3 py-3 text-right text-gray-500">{formatEUs(f.eus_d)}</td>}
+                    {ver("eus_a") && <td className="px-3 py-3 text-right text-gray-700">{fmt(f.eus_a)}</td>}
+                    {ver("eus_b") && <td className="px-3 py-3 text-right text-gray-700">{fmt(f.eus_b)}</td>}
+                    {ver("eus_c") && <td className="px-3 py-3 text-right text-gray-700">{fmt(f.eus_c)}</td>}
+                    {ver("eus_d") && <td className="px-3 py-3 text-right text-gray-500">{fmt(f.eus_d)}</td>}
                     {ver("meta_eus") && <td className="px-3 py-3 text-right">
                       <input
-                        value={edicion.eus}
-                        onChange={(e) => cambiarEus(f.cliente_id, e.target.value)}
+                        value={unidad === "UC" ? edicion.uc : edicion.eus}
+                        onChange={(e) => (unidad === "UC" ? cambiarUc : cambiarEus)(f.cliente_id, e.target.value)}
                         onBlur={() => guardarTotal(f.cliente_id)}
                         placeholder="—"
                         inputMode="decimal"
@@ -605,27 +607,27 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                       />
                       {desglosado && Math.round(sumaSku) !== Math.round(metaTotal) && (
                         <div className="mt-0.5 text-[10px] text-ambar" title="La suma de las metas por SKU no coincide con la meta total">
-                          SKU suman {formatEUs(sumaSku)}
+                          SKU suman {fmt(sumaSku)}
                         </div>
                       )}
                     </td>}
-                    {ver("ped_comprometido") && <td className="px-3 py-3 text-right text-gray-500">{Number(fp.ped_comprometido) > 0 ? formatEUs(fp.ped_comprometido) : "—"}</td>}
-                    {ver("ped_ingresado") && <td className="px-3 py-3 text-right text-gray-500">{Number(fp.ped_ingresado) > 0 ? formatEUs(fp.ped_ingresado) : "—"}</td>}
+                    {ver("ped_comprometido") && <td className="px-3 py-3 text-right text-gray-500">{Number(fp.ped_comprometido) > 0 ? fmt(fp.ped_comprometido) : "—"}</td>}
+                    {ver("ped_ingresado") && <td className="px-3 py-3 text-right text-gray-500">{Number(fp.ped_ingresado) > 0 ? fmt(fp.ped_ingresado) : "—"}</td>}
                     {ver("facturado") && (
-                      <td className="px-3 py-3 text-right text-gray-700" title={fp.venta_cargada ? `Venta real cargada del bottler${Number(fp.ped_facturado) > 0 ? ` · pedidos facturados: ${formatEUs(fp.ped_facturado)}` : ""}` : "Pedidos marcados facturados (el bottler aún no carga este mes)"}>
-                        {facturadoDe(fp) > 0 ? formatEUs(facturadoDe(fp)) : "—"}
+                      <td className="px-3 py-3 text-right text-gray-700" title={fp.venta_cargada ? `Venta real cargada del bottler${Number(fp.ped_facturado) > 0 ? ` · pedidos facturados: ${fmt(fp.ped_facturado)}` : ""}` : "Pedidos marcados facturados (el bottler aún no carga este mes)"}>
+                        {facturadoDe(fp) > 0 ? fmt(facturadoDe(fp)) : "—"}
                         {fp.venta_cargada && <span className="ml-1 text-[9px] text-verde" title="Venta real del bottler">●</span>}
                       </td>
                     )}
                     {ver("brecha") && (() => { const b = brechaDe(fp, metaTotal); return (
                       <td className={`px-3 py-3 text-right font-medium ${metaTotal <= 0 ? "text-gray-300" : b <= 0 ? "text-verde" : "text-ambar"}`}>
-                        {metaTotal > 0 ? formatEUs(b) : "—"}
+                        {metaTotal > 0 ? fmt(b) : "—"}
                       </td>
                     ); })()}
                     {ver("meta_uc") && <td className="px-3 py-3 text-right">
                       <input
-                        value={edicion.uc}
-                        onChange={(e) => cambiarUc(f.cliente_id, e.target.value)}
+                        value={unidad === "UC" ? edicion.eus : edicion.uc}
+                        onChange={(e) => (unidad === "UC" ? cambiarEus : cambiarUc)(f.cliente_id, e.target.value)}
                         onBlur={() => guardarTotal(f.cliente_id)}
                         placeholder="—"
                         inputMode="decimal"
@@ -643,7 +645,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                     <>
                       <tr className="bg-gray-50/60 text-[11px] text-gray-400">
                         {Array.from({ length: relleno }, (_, i) => <td key={i} />)}
-                        {([["sku", "SKU"], ["eus_a", etiquetas.a], ["eus_b", etiquetas.b], ["eus_c", etiquetas.c], ["eus_d", `${etiquetas.d} (LY)`], ["meta_eus", "Meta SKU"]] as [ColumnaDetalle, string][])
+                        {([["sku", "SKU"], ["eus_a", etiquetas.a], ["eus_b", etiquetas.b], ["eus_c", etiquetas.c], ["eus_d", `${etiquetas.d} (LY)`], ["meta_eus", unidad === "UC" ? "Meta SKU (UC)" : "Meta SKU (EU)"]] as [ColumnaDetalle, string][])
                           .filter(([col]) => col === "sku" || ver(col as ColumnaOcultable))
                           .map(([col, et]) => (
                           <td key={col} onClick={() => ordenarDetalle(col)} className={`cursor-pointer select-none px-3 py-1.5 font-medium hover:text-gray-600 ${col === "sku" ? "" : "text-right"}`}>
@@ -651,7 +653,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                           </td>
                         ))}
                         {ver("ped_comprometido") && <td />}{ver("ped_ingresado") && <td />}{ver("facturado") && <td />}{ver("brecha") && <td />}
-                        {ver("meta_uc") && <td className="px-3 py-1.5 text-right font-medium">UC</td>}
+                        {ver("meta_uc") && <td className="px-3 py-1.5 text-right font-medium">{unidad === "UC" ? "Meta SKU (EU)" : "UC"}</td>}
                       </tr>
                       {[...items]
                         .sort((x, y) => comparar(valorDetalle(x, ordenDet), valorDetalle(y, ordenDet), ascDet))
@@ -667,10 +669,10 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                                 {it.formato && <span className="text-gray-400"> · {it.formato}</span>}
                                 {it.categoria && <span className="ml-1.5 text-[10px] text-gray-300">{it.categoria}</span>}
                               </td>
-                              {ver("eus_a") && <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_a)}</td>}
-                              {ver("eus_b") && <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_b)}</td>}
-                              {ver("eus_c") && <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_c)}</td>}
-                              {ver("eus_d") && <td className="px-3 py-1.5 text-right text-gray-400">{formatEUs(it.eus_d)}</td>}
+                              {ver("eus_a") && <td className="px-3 py-1.5 text-right text-gray-600">{fmt(it.eus_a)}</td>}
+                              {ver("eus_b") && <td className="px-3 py-1.5 text-right text-gray-600">{fmt(it.eus_b)}</td>}
+                              {ver("eus_c") && <td className="px-3 py-1.5 text-right text-gray-600">{fmt(it.eus_c)}</td>}
+                              {ver("eus_d") && <td className="px-3 py-1.5 text-right text-gray-400">{fmt(it.eus_d)}</td>}
                               {ver("meta_eus") && <td className="px-3 py-1.5 text-right">
                                 <input
                                   value={txt}
@@ -719,16 +721,16 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                   <td />
                   {ver("cod") && <td />}{ver("bottler") && <td />}{ver("zona") && <td />}{ver("desarrollador") && <td />}
                   <td className="px-3 py-3">Total ({vis.length})</td>
-                  {ver("eus_a") && <td className={cell}>{formatEUs(sum((f) => Number(f.eus_a)))}</td>}
-                  {ver("eus_b") && <td className={cell}>{formatEUs(sum((f) => Number(f.eus_b)))}</td>}
-                  {ver("eus_c") && <td className={cell}>{formatEUs(sum((f) => Number(f.eus_c)))}</td>}
-                  {ver("eus_d") && <td className={`${cell} text-gray-500`}>{formatEUs(sum((f) => Number(f.eus_d)))}</td>}
-                  {ver("meta_eus") && <td className={cell}>{formatEUs(sum(metaDe))}</td>}
-                  {ver("ped_comprometido") && <td className={`${cell} text-gray-500`}>{formatEUs(sum((f) => Number(f.ped_comprometido)))}</td>}
-                  {ver("ped_ingresado") && <td className={`${cell} text-gray-500`}>{formatEUs(sum((f) => Number(f.ped_ingresado)))}</td>}
-                  {ver("facturado") && <td className={cell}>{formatEUs(sum(facturadoDe))}</td>}
-                  {ver("brecha") && <td className={`${cell} ${sum((f) => brechaDe(f, metaDe(f))) <= 0 ? "text-verde" : "text-ambar"}`}>{formatEUs(sum((f) => brechaDe(f, metaDe(f))))}</td>}
-                  {ver("meta_uc") && <td className={`${cell} text-gray-500`}>{eusAUc(sum(metaDe))}</td>}
+                  {ver("eus_a") && <td className={cell}>{fmt(sum((f) => Number(f.eus_a)))}</td>}
+                  {ver("eus_b") && <td className={cell}>{fmt(sum((f) => Number(f.eus_b)))}</td>}
+                  {ver("eus_c") && <td className={cell}>{fmt(sum((f) => Number(f.eus_c)))}</td>}
+                  {ver("eus_d") && <td className={`${cell} text-gray-500`}>{fmt(sum((f) => Number(f.eus_d)))}</td>}
+                  {ver("meta_eus") && <td className={cell}>{fmt(sum(metaDe))}</td>}
+                  {ver("ped_comprometido") && <td className={`${cell} text-gray-500`}>{fmt(sum((f) => Number(f.ped_comprometido)))}</td>}
+                  {ver("ped_ingresado") && <td className={`${cell} text-gray-500`}>{fmt(sum((f) => Number(f.ped_ingresado)))}</td>}
+                  {ver("facturado") && <td className={cell}>{fmt(sum(facturadoDe))}</td>}
+                  {ver("brecha") && <td className={`${cell} ${sum((f) => brechaDe(f, metaDe(f))) <= 0 ? "text-verde" : "text-ambar"}`}>{fmt(sum((f) => brechaDe(f, metaDe(f))))}</td>}
+                  {ver("meta_uc") && <td className={`${cell} text-gray-500`}>{unidad === "UC" ? formatoUnidad(sum(metaDe), "EU") : eusAUc(sum(metaDe))}</td>}
                 </tr>
               );
             })()}
