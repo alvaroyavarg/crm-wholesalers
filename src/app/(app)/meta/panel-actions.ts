@@ -139,13 +139,18 @@ async function recomendarSkusMetaInterno(input: { clienteId: string; fyMeta: num
         `Estamos armando la meta de ${mes} para ${nombre} (id: ${clienteId}, bottler ${cli?.bottler ?? "?"}). ` +
         `En UN solo paso llama a las cuatro herramientas a la vez: get_historia_sku_meta (fy_meta=${fyMeta}, periodo_meta=${periodoMeta}), ` +
         `get_boletines_vigentes (usa SOLO los de su bottler), get_notas_cliente y get_perfil_cliente. No hagas más llamadas después. ` +
-        `Propón entre 3 y 6 SKU para ir a ofrecer este mes, cada uno con un volumen sugerido en EUs y un motivo corto y concreto ` +
-        `(qué muestra su historia, si hay escalón vigente, si hay un compromiso anotado). Prioriza: SKU que compraba LY y dejó de comprar, ` +
-        `SKU que caen, escalones de boletín alcanzables y compromisos de la bitácora. Respeta la regla de stock. ` +
+        `Propón entre 3 y 6 SKU para ir a ofrecer este mes, cada uno con un volumen sugerido en EUs y un motivo corto y concreto. ` +
+        `REGLAS PARA EL VOLUMEN: (1) Mira la historia completa del FY anterior de cada SKU (campo historia), no solo los últimos 3 meses: ` +
+        `el poder de compra de un SKU es su total del FY anterior, su mayor mes y su promedio por compra. ` +
+        `(2) Muchos clientes compran un SKU en ciclos (cada 2-4 meses): un mes en cero NO es abandono ni riesgo de stock; usa cadencia_meses y ` +
+        `meses_desde_ultima_compra para decidir si este mes toca reponer, y si toca, propone cerca del promedio por compra o del mayor mes. ` +
+        `(3) No bajes la meta de un SKU por debajo de su promedio por compra del FY anterior sin un motivo explícito (compra fuerte hace menos de 2 meses, rechazo o acuerdo anotado). ` +
+        `(4) Prioriza: SKU con compras en el FY anterior y sin compra reciente cuando la cadencia indica reposición, SKU que caen, escalones de boletín alcanzables y compromisos de la bitácora. ` +
+        `(5) En cada motivo cita cifras: veces que compró en el FY anterior, cuánto sumó, mayor mes, última compra. Máximo 220 caracteres por motivo. ` +
         `Usa EXACTAMENTE los nombres de marca y formato como aparecen en get_historia_sku_meta (o "" en formato si no aplica). ` +
         `NO uses crear_recomendacion ni guardar_nota. ` +
         `Responde SOLO con un bloque \`\`\`json con esta forma exacta: ` +
-        `{"resumen": "2 líneas con la lectura del cliente", "propuestas": [{"marca": "", "formato": "", "eus": 0, "motivo": "", "evidencia": "ventas|boletin|memoria"}]}`,
+        `{"resumen": "máximo 2 frases y 280 caracteres con la lectura del cliente; SIN listar SKU aquí, eso va en propuestas", "propuestas": [{"marca": "", "formato": "", "eus": 0, "motivo": "", "evidencia": "ventas|boletin|memoria"}]}`,
     },
   ]);
 
@@ -162,7 +167,7 @@ async function recomendarSkusMetaInterno(input: { clienteId: string; fyMeta: num
       motivo: String(p.motivo ?? "").trim(),
       evidencia: (["ventas", "boletin", "memoria"] as const).includes(p.evidencia as "ventas") ? (p.evidencia as PropuestaSku["evidencia"]) : "ventas",
     }));
-  const resumen = String(parsed.resumen ?? "").trim();
+  const resumen = acortarResumen(String(parsed.resumen ?? ""));
 
   if (propuestas.length > 0) {
     const lineas = propuestas.map((p) => `• ${p.marca}${p.formato ? ` ${p.formato}` : ""}: ${p.eus} EUs — ${p.motivo}`);
@@ -180,6 +185,19 @@ async function recomendarSkusMetaInterno(input: { clienteId: string; fyMeta: num
   }
 
   return { ok: true as const, resumen, propuestas, texto: resultado.texto };
+}
+
+// El modelo a veces mete la lista de SKU dentro del resumen: se corta en el
+// primer bullet y se limita a ~2 frases para que el panel quede legible.
+function acortarResumen(texto: string): string {
+  let t = texto.replace(/\s+/g, " ").trim();
+  const bullet = t.search(/\s[•\-–]\s/);
+  if (bullet > 40) t = t.slice(0, bullet).trim();
+  if (t.length > 320) {
+    const corte = t.slice(0, 320).lastIndexOf(". ");
+    t = (corte > 120 ? t.slice(0, corte + 1) : t.slice(0, 317) + "…").trim();
+  }
+  return t;
 }
 
 function extraerJson(texto: string): { resumen?: string; propuestas?: Partial<PropuestaSku>[] } | null {

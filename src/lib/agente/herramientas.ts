@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Anthropic from "@anthropic-ai/sdk";
-import { etiquetaMesCalendario, fiscalActual, mesDePeriodo, sumarPeriodos } from "@/lib/fiscal";
+import { aFiscal, etiquetaMesCalendario, fiscalActual, inicioPeriodo, mesDePeriodo, sumarPeriodos } from "@/lib/fiscal";
 import type { ItemDetalle, MixCategoriaRow, MixSkuRow, SeriePeriodoRow } from "@/lib/types";
 
 // Herramientas del copiloto. Cada ejecutor devuelve un insight COMPACTO y ya
@@ -34,7 +34,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_historia_sku_meta",
     description:
-      "Para PLANIFICAR LA META DE UN MES: compra del cliente por SKU en los 3 meses anteriores al mes objetivo y el mismo mes del año anterior (LY), con señales (dejó de comprar, cae vs LY, nuevo), la meta total actual del mes, su desglose por SKU si existe y los pedidos ya registrados. Los nombres de marca y formato son EXACTOS: úsalos tal cual al proponer SKU. Si no se indica fy/periodo, usa el mes fiscal actual.",
+      "Para PLANIFICAR LA META DE UN MES: compra del cliente por SKU en los 3 meses anteriores al mes objetivo y el mismo mes del año anterior (LY), MÁS la historia completa del año fiscal anterior y del actual por SKU (total, meses con compra, mayor mes, cadencia de compra, última compra), señales (dejó de comprar, cae vs LY, compra en ciclos, nuevo), la meta total actual del mes, su desglose por SKU si existe y los pedidos ya registrados. Los nombres de marca y formato son EXACTOS: úsalos tal cual al proponer SKU. Si no se indica fy/periodo, usa el mes fiscal actual.",
     input_schema: {
       type: "object",
       properties: {
@@ -335,8 +335,13 @@ export async function getHistoriaSkuMeta(
   const c = sumarPeriodos(fyMeta, periodoMeta, -1);
   const d = { fy: fyMeta - 1, periodo: periodoMeta };
 
-  const [cliRes, detRes, planRes, pedRes] = await Promise.all([
-    supabase.from("clientes").select("nombre, nombre_corto, bottler, zona, desarrollador").eq("id", clienteId).single(),
+  // Historia larga: desde el inicio del FY anterior al del mes objetivo
+  const fyLy = fyMeta - 1;
+  const desde = inicioPeriodo(fyLy, 1);
+  const desdeISO = `${desde.getFullYear()}-${String(desde.getMonth() + 1).padStart(2, "0")}-01`;
+
+  const [cliRes, detRes, planRes, pedRes, ventasRes] = await Promise.all([
+    supabase.from("clientes").select("nombre, nombre_corto, bottler, zona, desarrollador, es_otros").eq("id", clienteId).single(),
     supabase.rpc("detalle_meta_cliente", {
       p_cliente: clienteId,
       p_fy_a: a.fy, p_periodo_a: a.periodo,
@@ -347,18 +352,68 @@ export async function getHistoriaSkuMeta(
     }),
     supabase.from("plan_ventas").select("eus_plan").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta).maybeSingle(),
     supabase.from("pedidos").select("fecha, marca, formato, eus, estado, precio_botella, comentario").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
+    supabase.from("ventas").select("periodo, marca, formato, eus").eq("cliente_id", clienteId).gte("periodo", desdeISO),
   ]);
   if (detRes.error) return { error: detRes.error.message };
+
+  // ---- Historia larga por SKU: FY anterior completo + FY actual a la fecha ----
+  interface Compra { fy: number; periodo: number; eus: number }
+  const porSku = new Map<string, Compra[]>();
+  for (const v of (ventasRes.data ?? []) as { periodo: string; marca: string; formato: string | null; eus: number }[]) {
+    const [y, m] = v.periodo.split("-").map(Number);
+    const { fy, periodo } = aFiscal(new Date(y, m - 1, 1));
+    if (fy > fyMeta || (fy === fyMeta && periodo >= periodoMeta)) continue; // solo pasado
+    const k = `${v.marca}|${v.formato ?? ""}`;
+    const arr = porSku.get(k) ?? [];
+    const prev = arr.find((c) => c.fy === fy && c.periodo === periodo);
+    if (prev) prev.eus += Number(v.eus);
+    else arr.push({ fy, periodo, eus: Number(v.eus) });
+    porSku.set(k, arr);
+  }
+  const idx = (c: { fy: number; periodo: number }) => c.fy * 12 + c.periodo;
+  const idxMeta = fyMeta * 12 + periodoMeta;
+  function historiaLarga(marca: string, formato: string) {
+    const compras = (porSku.get(`${marca}|${formato}`) ?? []).filter((c) => c.eus > 0).sort((x, y) => idx(x) - idx(y));
+    const ly = compras.filter((c) => c.fy === fyLy);
+    const act = compras.filter((c) => c.fy === fyMeta);
+    const ultima = compras.at(-1) ?? null;
+    const gaps = compras.slice(1).map((c, i) => idx(c) - idx(compras[i]));
+    const cadencia = gaps.length > 0 ? Math.round((gaps.reduce((a, b) => a + b, 0) / gaps.length) * 10) / 10 : null;
+    const mayor = compras.reduce((m, c) => (c.eus > m ? c.eus : m), 0);
+    const fmt = (c: Compra) => `${etiquetaMesCalendario(c.fy, c.periodo)}: ${r0(c.eus)}`;
+    return {
+      fy_anterior: {
+        etiqueta: `FY${String(fyLy).slice(2)}`,
+        total_eus: r0(ly.reduce((a, c) => a + c.eus, 0)),
+        meses_con_compra: ly.length,
+        promedio_por_compra: ly.length ? r0(ly.reduce((a, c) => a + c.eus, 0) / ly.length) : 0,
+        compras: ly.map(fmt),
+      },
+      fy_actual_a_la_fecha: {
+        etiqueta: `FY${String(fyMeta).slice(2)}`,
+        total_eus: r0(act.reduce((a, c) => a + c.eus, 0)),
+        meses_con_compra: act.length,
+        compras: act.map(fmt),
+      },
+      mayor_mes_eus: r0(mayor),
+      cadencia_meses: cadencia, // cada cuántos meses compra este SKU (promedio)
+      ultima_compra: ultima ? etiquetaMesCalendario(ultima.fy, ultima.periodo) : null,
+      meses_desde_ultima_compra: ultima ? idxMeta - idx(ultima) : null,
+    };
+  }
 
   interface Item { categoria: string; marca: string; formato: string; eus_a: number; eus_b: number; eus_c: number; eus_d: number; meta_eus: number }
   const items = ((detRes.data ?? []) as Item[]).map((it) => {
     const ea = Number(it.eus_a), eb = Number(it.eus_b), ec = Number(it.eus_c), ed = Number(it.eus_d);
     const reciente = (ea + eb + ec) / 3;
+    const larga = historiaLarga(it.marca, it.formato);
     const senales: string[] = [];
-    if (ed > 0 && ea + eb + ec === 0) senales.push("compraba LY, este año no");
+    const enCiclos = larga.cadencia_meses != null && larga.cadencia_meses >= 2;
+    if (enCiclos) senales.push(`compra en ciclos (cada ~${larga.cadencia_meses} meses; última ${larga.ultima_compra}, hace ${larga.meses_desde_ultima_compra})`);
+    if (ed > 0 && ea + eb + ec === 0) senales.push(enCiclos ? "sin compra en 3 meses (revisar si toca reponer por cadencia)" : "compraba LY, este año no");
     else if (ed > 0 && reciente < ed * 0.67) senales.push("cae vs LY");
-    if (ed === 0 && ec > 0) senales.push("nuevo este año");
-    if (ec === 0 && (ea > 0 || eb > 0)) senales.push("sin compra el último mes");
+    if (ed === 0 && ec > 0 && larga.fy_anterior.meses_con_compra === 0) senales.push("nuevo este año");
+    if (ec === 0 && (ea > 0 || eb > 0) && !enCiclos) senales.push("sin compra el último mes");
     return {
       marca: it.marca,
       formato: it.formato,
@@ -370,8 +425,13 @@ export async function getHistoriaSkuMeta(
       promedio_3m: r0(reciente),
       meta_sku_eus: r0(Number(it.meta_eus)),
       senales,
+      historia: larga,
     };
   });
+
+  // Totales del cliente para dimensionar la meta
+  const totalLy = [...porSku.values()].flat().filter((c) => c.fy === fyLy).reduce((a, c) => a + c.eus, 0);
+  const mesesLyConCompra = new Set([...porSku.values()].flat().filter((c) => c.fy === fyLy && c.eus > 0).map((c) => c.periodo)).size;
 
   const metaSku = items.reduce((s, it) => s + Number(it.meta_sku_eus), 0);
   const pedidos = (pedRes.data ?? []) as { fecha: string; marca: string; formato: string; eus: number; estado: string; precio_botella: number | null; comentario: string | null }[];
@@ -383,6 +443,9 @@ export async function getHistoriaSkuMeta(
     mes_objetivo: etiquetaMesCalendario(fyMeta, periodoMeta),
     fy_meta: fyMeta,
     periodo_meta: periodoMeta,
+    fy_anterior_total_eus: r0(totalLy),
+    fy_anterior_meses_con_compra: mesesLyConCompra,
+    fy_anterior_promedio_mensual: mesesLyConCompra ? r0(totalLy / mesesLyConCompra) : 0,
     meta_total_eus: r0(Number(planRes.data?.eus_plan ?? 0)),
     meta_desglosada_sku_eus: r0(metaSku),
     total_3m_promedio: r0(items.reduce((s, it) => s + Number(it.promedio_3m), 0)),
