@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { aFiscal, etiquetaMesCalendario } from "@/lib/fiscal";
 import { FACTOR_UC_EU } from "@/lib/importar/unidades";
+import { anthropic, MODELO_RAPIDO } from "@/lib/anthropic";
 import type { DetalleMetaItem, EstadoPedido, EstadoRecomendacion, Nota, Pedido, PropuestaSku } from "@/lib/types";
 
 // Acciones del panel lateral de cliente en /meta: historia por SKU,
@@ -189,9 +190,22 @@ async function recomendarSkusMetaInterno(input: { clienteId: string; fyMeta: num
     },
   ]);
 
-  const parsed = extraerJson(resultado.texto);
-  if (!parsed) {
-    return { ok: false as const, error: "El copiloto no devolvió una propuesta legible. Intenta de nuevo.", texto: resultado.texto };
+  let parsed = extraerJson(resultado.texto);
+  if (!parsed || !Array.isArray(parsed.propuestas) || parsed.propuestas.length === 0) {
+    // El modelo respondió en prosa (o el JSON llegó cortado): se estructura
+    // en un paso corto con salida forzada a esquema.
+    parsed = await estructurarPropuesta(resultado.texto).catch((e) => {
+      console.error("estructurarPropuesta:", e);
+      return null;
+    });
+  }
+  if (!parsed || !Array.isArray(parsed.propuestas) || parsed.propuestas.length === 0) {
+    const muestra = resultado.texto.replace(/\s+/g, " ").slice(0, 400);
+    return {
+      ok: false as const,
+      error: `El copiloto no devolvió una propuesta legible. Respondió: "${muestra}${resultado.texto.length > 400 ? "…" : ""}"`,
+      texto: resultado.texto,
+    };
   }
   const propuestas: PropuestaSku[] = (parsed.propuestas ?? [])
     .filter((p) => p && typeof p.marca === "string" && p.marca.trim())
@@ -231,6 +245,49 @@ async function recomendarSkusMetaInterno(input: { clienteId: string; fyMeta: num
   }
 
   return { ok: true as const, resumen, propuestas: conId, texto: resultado.texto };
+}
+
+// Segundo intento de formato: convierte la respuesta libre del agente en el
+// JSON de propuestas con salida forzada a esquema (modelo rápido).
+const ESQUEMA_PROPUESTA = {
+  type: "object",
+  properties: {
+    resumen: { type: "string" },
+    propuestas: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          marca: { type: "string" },
+          formato: { type: "string" },
+          eus: { type: "number" },
+          motivo: { type: "string" },
+          evidencia: { type: "string", enum: ["ventas", "boletin", "memoria"] },
+        },
+        required: ["marca", "formato", "eus", "motivo", "evidencia"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["resumen", "propuestas"],
+  additionalProperties: false,
+} as const;
+
+async function estructurarPropuesta(texto: string): Promise<{ resumen?: string; propuestas?: Partial<PropuestaSku>[] } | null> {
+  if (!texto.trim()) return null;
+  const respuesta = await anthropic().messages.create({
+    model: MODELO_RAPIDO,
+    max_tokens: 3000,
+    system:
+      "Recibes la respuesta de un copiloto comercial que propone SKU para la meta del mes de un cliente. " +
+      "Extrae las propuestas tal como vienen (marca y formato EXACTOS, volumen en EUs, motivo corto, tipo de evidencia) y un resumen de máximo 2 frases. " +
+      "Si el texto no contiene propuestas de SKU, devuelve propuestas vacío. No inventes SKU ni cifras.",
+    output_config: { format: { type: "json_schema", schema: ESQUEMA_PROPUESTA } },
+    messages: [{ role: "user", content: texto.slice(0, 12000) }],
+  });
+  const bloque = respuesta.content.find((b) => b.type === "text");
+  if (!bloque || bloque.type !== "text") return null;
+  return JSON.parse(bloque.text);
 }
 
 // El modelo a veces mete la lista de SKU dentro del resumen: se corta en el
