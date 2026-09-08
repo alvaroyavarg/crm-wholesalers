@@ -338,11 +338,47 @@ export async function metaProximoMes(fyParam?: number, periodoParam?: number) {
   });
   if (error) throw new Error(`resumen_meta_periodo: ${error.message}`);
 
+  // Avance del mes objetivo: pedidos por estado, venta real cargada y qué
+  // bottlers ya cargaron ese mes. Regla: si el bottler del cliente ya cargó
+  // el mes, la venta real es la única verdad y "facturado" = venta real.
+  const [pedRes, mtdRes, cargasRes] = await Promise.all([
+    supabase.from("pedidos").select("cliente_id, estado, eus").eq("anio_fiscal", meta.fy).eq("periodo", meta.periodo),
+    supabase.rpc("mtd_cartera", { p_fy: meta.fy, p_periodo: meta.periodo }),
+    supabase.from("importaciones").select("origen").eq("anio_fiscal", meta.fy).eq("periodo", meta.periodo),
+  ]);
+  const ped = new Map<string, { comprometido: number; ingresado: number; facturado: number }>();
+  for (const p of pedRes.error ? [] : (pedRes.data ?? [])) {
+    const acc = ped.get(p.cliente_id as string) ?? { comprometido: 0, ingresado: 0, facturado: 0 };
+    const est = p.estado as "comprometido" | "ingresado" | "facturado";
+    acc[est] = (acc[est] ?? 0) + Number(p.eus);
+    ped.set(p.cliente_id as string, acc);
+  }
+  const real = new Map<string, { total: number; koa: number; koe: number }>();
+  for (const r of mtdRes.error ? [] : ((mtdRes.data ?? []) as MtdClienteRow[])) {
+    real.set(r.cliente_id, { total: Number(r.mtd_eus), koa: Number(r.mtd_koa), koe: Number(r.mtd_koe) });
+  }
+  const cargados = new Set((cargasRes.error ? [] : (cargasRes.data ?? [])).map((c) => c.origen as string));
+
+  const clientes = ((data ?? []) as MetaClienteRow[]).map((c) => {
+    const p = ped.get(c.cliente_id) ?? { comprometido: 0, ingresado: 0, facturado: 0 };
+    const v = real.get(c.cliente_id) ?? { total: 0, koa: 0, koe: 0 };
+    // Frontera: basta con que uno de sus bottlers haya cargado para que la venta real mande.
+    const cargada = c.bottler ? cargados.has(c.bottler) || (c.es_frontera && (cargados.has("KOA") || cargados.has("KOE"))) : cargados.size > 0;
+    return {
+      ...c,
+      ped_comprometido: p.comprometido,
+      ped_ingresado: p.ingresado,
+      ped_facturado: p.facturado,
+      venta_real: v.total,
+      venta_cargada: cargada,
+    };
+  });
+
   return {
     fyMeta: meta.fy,
     periodoMeta: meta.periodo,
     columnas: { a: colA, b: colB, c: colC, d: colD },
-    clientes: (data ?? []) as MetaClienteRow[],
+    clientes,
   };
 }
 

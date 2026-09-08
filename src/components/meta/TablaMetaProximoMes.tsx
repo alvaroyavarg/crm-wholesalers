@@ -10,7 +10,8 @@ import type { DetalleMetaItem, MetaClienteRow, SkuCatalogo } from "@/lib/types";
 
 type Columna =
   | "cod" | "bottler" | "zona" | "desarrollador" | "nombre"
-  | "eus_a" | "eus_b" | "eus_c" | "eus_d" | "meta_eus";
+  | "eus_a" | "eus_b" | "eus_c" | "eus_d" | "meta_eus"
+  | "ped_comprometido" | "ped_ingresado" | "facturado" | "brecha";
 type ColumnaDetalle = "sku" | "eus_a" | "eus_b" | "eus_c" | "eus_d" | "meta_eus";
 
 interface Props {
@@ -48,9 +49,27 @@ const OCULTABLES: { col: ColumnaOcultable; etiqueta: string }[] = [
   { col: "eus_c", etiqueta: "Mes -1" },
   { col: "eus_d", etiqueta: "Mismo mes LY" },
   { col: "meta_eus", etiqueta: "Meta" },
+  { col: "ped_comprometido", etiqueta: "Comprometido" },
+  { col: "ped_ingresado", etiqueta: "Ingresado" },
+  { col: "facturado", etiqueta: "Facturado" },
+  { col: "brecha", etiqueta: "Brecha" },
   { col: "meta_uc", etiqueta: "Meta UC" },
 ];
 const CLAVE_COLUMNAS = "crm.meta.columnasOcultas";
+const CLAVE_BRECHA = "crm.meta.brecha";
+
+// Brecha = Meta − lo que elijas descontar. Facturado ya respeta la regla
+// "si el bottler cargó el mes, la venta real es la única verdad".
+type Descuento = "facturado" | "ped_ingresado" | "ped_comprometido";
+const DESCUENTOS: { col: Descuento; etiqueta: string; corta: string }[] = [
+  { col: "facturado", etiqueta: "Facturado", corta: "Fact." },
+  { col: "ped_ingresado", etiqueta: "Ingresado", corta: "Ingr." },
+  { col: "ped_comprometido", etiqueta: "Comprometido", corta: "Comp." },
+];
+// Facturado efectivo: venta real si el bottler ya cargó el mes; si no, pedidos facturados.
+function facturadoDe(f: MetaClienteRow): number {
+  return f.venta_cargada ? Number(f.venta_real) : Number(f.ped_facturado);
+}
 
 function etiquetaBottler(b: string | null): string {
   return b === "KOA" ? "Andina" : b === "KOE" ? "Embonor" : "—";
@@ -88,12 +107,41 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
   // ---- columnas visibles ----
   const [ocultas, setOcultas] = useState<Set<ColumnaOcultable>>(new Set());
   const [menuColumnas, setMenuColumnas] = useState(false);
+  const [menuBrecha, setMenuBrecha] = useState(false);
+  const [descuentos, setDescuentos] = useState<Set<Descuento>>(new Set(["facturado"]));
+  // Pedidos cambiados desde el panel (sin recargar la página)
+  const [pedidosLocal, setPedidosLocal] = useState<Record<string, { comprometido: number; ingresado: number; facturado: number }>>({});
   useEffect(() => {
     try {
       const raw = localStorage.getItem(CLAVE_COLUMNAS);
       if (raw) setOcultas(new Set(JSON.parse(raw) as ColumnaOcultable[]));
+      const rawB = localStorage.getItem(CLAVE_BRECHA);
+      if (rawB) setDescuentos(new Set(JSON.parse(rawB) as Descuento[]));
     } catch { /* sin preferencia guardada */ }
   }, []);
+  function alternarDescuento(d: Descuento) {
+    setDescuentos((prev) => {
+      const s = new Set(prev);
+      if (s.has(d)) s.delete(d); else s.add(d);
+      try { localStorage.setItem(CLAVE_BRECHA, JSON.stringify([...s])); } catch { /* sin storage */ }
+      return s;
+    });
+  }
+  // fila con los pedidos vivos (los del panel pisan los de la carga)
+  function conPedidos(f: MetaClienteRow): MetaClienteRow {
+    const l = pedidosLocal[f.cliente_id];
+    return l ? { ...f, ped_comprometido: l.comprometido, ped_ingresado: l.ingresado, ped_facturado: l.facturado } : f;
+  }
+  function brechaDe(f: MetaClienteRow, metaTotal: number): number {
+    let b = metaTotal;
+    if (descuentos.has("facturado")) b -= facturadoDe(f);
+    if (descuentos.has("ped_ingresado")) b -= Number(f.ped_ingresado);
+    if (descuentos.has("ped_comprometido")) b -= Number(f.ped_comprometido);
+    return b;
+  }
+  const etiquetaBrecha = descuentos.size === 0
+    ? "Brecha = Meta"
+    : `Meta − ${DESCUENTOS.filter((d) => descuentos.has(d.col)).map((d) => d.corta).join(" − ")}`;
   function alternarColumna(col: ColumnaOcultable) {
     setOcultas((prev) => {
       const s = new Set(prev);
@@ -242,8 +290,13 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
     { col: "eus_c", etiqueta: etiquetas.c, alinear: "right" },
     { col: "eus_d", etiqueta: `${etiquetas.d} (LY)`, alinear: "right" },
     { col: "meta_eus", etiqueta: "Meta", alinear: "right" },
+    { col: "ped_comprometido", etiqueta: "Comprometido", alinear: "right" },
+    { col: "ped_ingresado", etiqueta: "Ingresado", alinear: "right" },
+    { col: "facturado", etiqueta: "Facturado", alinear: "right" },
+    { col: "brecha", etiqueta: etiquetaBrecha, alinear: "right" },
   ];
-  function valor(f: MetaClienteRow, col: Columna): number | string {
+  function valor(f0: MetaClienteRow, col: Columna): number | string {
+    const f = conPedidos(f0);
     switch (col) {
       case "cod": return Number(String(f.cod_diageo ?? "").split(" / ")[0]) || 0;
       case "bottler": return etiquetaBottler(f.bottler);
@@ -251,6 +304,8 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
       case "desarrollador": return f.desarrollador ?? "";
       case "nombre": return f.nombre_corto ?? f.nombre;
       case "meta_eus": return Number(ediciones[f.cliente_id]?.eus ?? f.meta_eus) || 0;
+      case "facturado": return facturadoDe(f);
+      case "brecha": return brechaDe(f, Number(ediciones[f.cliente_id]?.eus ?? f.meta_eus) || 0);
       default: return Number(f[col]);
     }
   }
@@ -384,6 +439,12 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                   </div>
                 ))}
               </div>
+              {(() => { const fp = conPedidos(f); const m = Number(edicion.eus) || 0; const fac = facturadoDe(fp); return (fac > 0 || Number(fp.ped_ingresado) > 0 || Number(fp.ped_comprometido) > 0) ? (
+                <p className="mt-1.5 text-[11px] text-gray-500">
+                  Fact. {formatEUs(fac)}{fp.venta_cargada ? " ●" : ""} · Ingr. {formatEUs(fp.ped_ingresado)} · Comp. {formatEUs(fp.ped_comprometido)}
+                  {m > 0 && <span className={`ml-2 font-medium ${brechaDe(fp, m) <= 0 ? "text-verde" : "text-ambar"}`}>brecha {formatEUs(brechaDe(fp, m))}</span>}
+                </p>
+              ) : null; })()}
               <div className="mt-2 flex items-center gap-2">
                 <label className="flex flex-1 items-center gap-1.5 whitespace-nowrap text-[11px] text-gray-500">
                   Meta EUs
@@ -425,11 +486,37 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                 <th
                   key={c.col}
                   onClick={() => ordenarPor(c.col)}
-                  title="Ordenar (clic de nuevo invierte)"
-                  className={`cursor-pointer select-none px-3 py-3 font-medium hover:text-gray-700 ${c.alinear === "right" ? "text-right" : ""}`}
+                  title={c.col === "facturado" ? "Si el bottler ya cargó el mes: venta real. Si no: pedidos facturados." : "Ordenar (clic de nuevo invierte)"}
+                  className={`relative cursor-pointer select-none px-3 py-3 font-medium hover:text-gray-700 ${c.alinear === "right" ? "text-right" : ""}`}
                 >
                   {c.etiqueta}
                   {indicador(orden === c.col, asc)}
+                  {c.col === "brecha" && (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMenuBrecha((v) => !v); }}
+                        title="Elegir qué se descuenta de la meta"
+                        className="ml-1 rounded border border-gray-200 px-1 text-[10px] text-gray-500 hover:border-verde hover:text-verde"
+                      >
+                        ⚙
+                      </button>
+                      {menuBrecha && <div className="fixed inset-0 z-10 cursor-default" onClick={(e) => { e.stopPropagation(); setMenuBrecha(false); }} />}
+                      {menuBrecha && (
+                        <div onClick={(e) => e.stopPropagation()} className="absolute right-0 z-20 mt-1 w-52 cursor-default rounded-lg border border-gray-200 bg-white p-2 text-left text-xs font-normal shadow-lg">
+                          <p className="mb-1 text-[10px] uppercase tracking-wide text-gray-400">Brecha = Meta −</p>
+                          {DESCUENTOS.map((d) => (
+                            <label key={d.col} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 hover:bg-gray-50">
+                              <input type="checkbox" checked={descuentos.has(d.col)} onChange={() => alternarDescuento(d.col)} />
+                              <span className="text-gray-700">{d.etiqueta}</span>
+                            </label>
+                          ))}
+                          <p className="mt-1 border-t border-gray-100 pt-1.5 text-[10px] text-gray-400">
+                            Facturado usa la venta real del bottler cuando ese mes ya está cargado; los pedidos facturados que no vinieron en la venta valen 0.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </th>
               ))}
               {ver("meta_uc") && (
@@ -442,6 +529,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
           <tbody>
             {visibles.map((f) => {
               const edicion = valorEdicion(f);
+              const fp = conPedidos(f);
               const abierto = expandido === f.cliente_id;
               const items = detalle[f.cliente_id];
               const metaTotal = Number(edicion.eus) || 0;
@@ -501,6 +589,19 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                         </div>
                       )}
                     </td>}
+                    {ver("ped_comprometido") && <td className="px-3 py-3 text-right text-gray-500">{Number(fp.ped_comprometido) > 0 ? formatEUs(fp.ped_comprometido) : "—"}</td>}
+                    {ver("ped_ingresado") && <td className="px-3 py-3 text-right text-gray-500">{Number(fp.ped_ingresado) > 0 ? formatEUs(fp.ped_ingresado) : "—"}</td>}
+                    {ver("facturado") && (
+                      <td className="px-3 py-3 text-right text-gray-700" title={fp.venta_cargada ? `Venta real cargada del bottler${Number(fp.ped_facturado) > 0 ? ` · pedidos facturados: ${formatEUs(fp.ped_facturado)}` : ""}` : "Pedidos marcados facturados (el bottler aún no carga este mes)"}>
+                        {facturadoDe(fp) > 0 ? formatEUs(facturadoDe(fp)) : "—"}
+                        {fp.venta_cargada && <span className="ml-1 text-[9px] text-verde" title="Venta real del bottler">●</span>}
+                      </td>
+                    )}
+                    {ver("brecha") && (() => { const b = brechaDe(fp, metaTotal); return (
+                      <td className={`px-3 py-3 text-right font-medium ${metaTotal <= 0 ? "text-gray-300" : b <= 0 ? "text-verde" : "text-ambar"}`}>
+                        {metaTotal > 0 ? formatEUs(b) : "—"}
+                      </td>
+                    ); })()}
                     {ver("meta_uc") && <td className="px-3 py-3 text-right">
                       <input
                         value={edicion.uc}
@@ -529,6 +630,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                             {et}{indicador(ordenDet === col, ascDet)}
                           </td>
                         ))}
+                        {ver("ped_comprometido") && <td />}{ver("ped_ingresado") && <td />}{ver("facturado") && <td />}{ver("brecha") && <td />}
                         {ver("meta_uc") && <td className="px-3 py-1.5 text-right font-medium">UC</td>}
                       </tr>
                       {[...items]
@@ -560,6 +662,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                                 />
                                 {guardando[k] && <span className="ml-1 text-[10px] text-gray-400">…</span>}
                               </td>}
+                              {ver("ped_comprometido") && <td />}{ver("ped_ingresado") && <td />}{ver("facturado") && <td />}{ver("brecha") && <td />}
                               {ver("meta_uc") && <td className="px-3 py-1.5 text-right text-gray-400">{Number.isFinite(n) && n > 0 ? eusAUc(n) : "—"}</td>}
                             </tr>
                           );
@@ -585,6 +688,31 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
               );
             })}
           </tbody>
+          <tfoot>
+            {(() => {
+              const vis = visibles.map(conPedidos);
+              const sum = (fn: (f: MetaClienteRow) => number) => vis.reduce((s, f) => s + fn(f), 0);
+              const metaDe = (f: MetaClienteRow) => Number(ediciones[f.cliente_id]?.eus ?? f.meta_eus) || 0;
+              const cell = "px-3 py-3 text-right";
+              return (
+                <tr className="border-t border-gray-200 bg-gray-50/60 text-xs font-medium text-gray-700">
+                  <td />
+                  {ver("cod") && <td />}{ver("bottler") && <td />}{ver("zona") && <td />}{ver("desarrollador") && <td />}
+                  <td className="px-3 py-3">Total ({vis.length})</td>
+                  {ver("eus_a") && <td className={cell}>{formatEUs(sum((f) => Number(f.eus_a)))}</td>}
+                  {ver("eus_b") && <td className={cell}>{formatEUs(sum((f) => Number(f.eus_b)))}</td>}
+                  {ver("eus_c") && <td className={cell}>{formatEUs(sum((f) => Number(f.eus_c)))}</td>}
+                  {ver("eus_d") && <td className={`${cell} text-gray-500`}>{formatEUs(sum((f) => Number(f.eus_d)))}</td>}
+                  {ver("meta_eus") && <td className={cell}>{formatEUs(sum(metaDe))}</td>}
+                  {ver("ped_comprometido") && <td className={`${cell} text-gray-500`}>{formatEUs(sum((f) => Number(f.ped_comprometido)))}</td>}
+                  {ver("ped_ingresado") && <td className={`${cell} text-gray-500`}>{formatEUs(sum((f) => Number(f.ped_ingresado)))}</td>}
+                  {ver("facturado") && <td className={cell}>{formatEUs(sum(facturadoDe))}</td>}
+                  {ver("brecha") && <td className={`${cell} ${sum((f) => brechaDe(f, metaDe(f))) <= 0 ? "text-verde" : "text-ambar"}`}>{formatEUs(sum((f) => brechaDe(f, metaDe(f))))}</td>}
+                  {ver("meta_uc") && <td className={`${cell} text-gray-500`}>{eusAUc(sum(metaDe))}</td>}
+                </tr>
+              );
+            })()}
+          </tfoot>
         </table>
       </div>
 
@@ -600,6 +728,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
           metaActual={Number(valorEdicion(filaPanel).eus) || 0}
           onClose={() => setPanelId(null)}
           onMetaSku={aplicarMetaSku}
+          onPedidos={(clienteId, sumas) => setPedidosLocal((p) => ({ ...p, [clienteId]: sumas }))}
         />
       )}
     </div>

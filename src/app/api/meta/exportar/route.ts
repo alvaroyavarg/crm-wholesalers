@@ -48,6 +48,11 @@ export async function GET(request: Request) {
     [etC]: Math.round(Number(c.eus_c)),
     [etD]: Math.round(Number(c.eus_d)),
     "Meta EUS": Math.round(Number(c.meta_eus)),
+    Comprometido: Math.round(Number(c.ped_comprometido)),
+    Ingresado: Math.round(Number(c.ped_ingresado)),
+    Facturado: Math.round(c.venta_cargada ? Number(c.venta_real) : Number(c.ped_facturado)),
+    "Facturado según": c.venta_cargada ? "venta bottler" : "pedidos",
+    Brecha: Math.round(Number(c.meta_eus) - (c.venta_cargada ? Number(c.venta_real) : Number(c.ped_facturado))),
     "Meta UC": Number(c.meta_eus) > 0
       ? Number((Number(c.meta_eus) / FACTOR_UC_EU).toFixed(1))
       : "",
@@ -69,7 +74,8 @@ export async function GET(request: Request) {
   const hojaResumen = XLSX.utils.json_to_sheet(filasResumen);
   hojaResumen["!cols"] = [
     { wch: 12 }, { wch: 24 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 14 },
-    { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
+    { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 },
+    { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 10 },
   ];
   XLSX.utils.book_append_sheet(wb, hojaResumen, "Resumen");
 

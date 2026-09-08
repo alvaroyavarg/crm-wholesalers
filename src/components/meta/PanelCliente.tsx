@@ -46,6 +46,7 @@ interface Props {
   metaActual: number; // meta total viva (puede estar editándose en la tabla)
   onClose: () => void;
   onMetaSku: (clienteId: string, marca: string, formato: string, eus: number, total: number) => void;
+  onPedidos?: (clienteId: string, sumas: { comprometido: number; ingresado: number; facturado: number }) => void;
 }
 
 type Tab = "historia" | "copiloto" | "bitacora" | "pedidos";
@@ -108,7 +109,7 @@ function Texto({ texto }: { texto: string }) {
   );
 }
 
-export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, catalogo, metaActual, onClose, onMetaSku }: Props) {
+export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, catalogo, metaActual, onClose, onMetaSku, onPedidos }: Props) {
   const [tab, setTab] = useState<Tab>("historia");
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState("");
@@ -224,6 +225,16 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
   );
   const sumaSku = detalle.reduce((s, it) => s + Number(it.meta_eus), 0);
   const pedidosEnCurso = pedidos.filter((p) => p.estado !== "facturado").reduce((s, p) => s + Number(p.eus), 0);
+  const cargadoRef = useRef(false);
+  useEffect(() => {
+    // no avisar en la carga inicial (la tabla ya trae esas sumas)
+    if (cargando) return;
+    if (!cargadoRef.current) { cargadoRef.current = true; return; }
+    const sumas = { comprometido: 0, ingresado: 0, facturado: 0 };
+    for (const p of pedidos) sumas[p.estado] += Number(p.eus);
+    onPedidos?.(clienteId, sumas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidos, cargando]);
   const pedidosTotal = pedidos.reduce((s, p) => s + Number(p.eus), 0);
   const compromisosPendientes = notas.filter((n) => n.tipo === "compromiso" && !n.cerrada_at);
 
@@ -878,6 +889,11 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
               <p className="mb-2 text-[11px] text-gray-500">
                 Registra una compra que ya ingresaste o que el cliente comprometió. No modifica la venta del bottler: es avance en curso hasta que llegue el archivo.
               </p>
+              {fila.venta_cargada && (
+                <p className="mb-2 rounded-lg bg-verde-suave px-3 py-2 text-[11px] text-gray-700">
+                  El bottler ya cargó este mes: venta real <b>{formatEUs(fila.venta_real)} EUs</b>. En la tabla, Facturado usa esa cifra; un pedido marcado facturado que no vino en la venta vale 0.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-[11px] text-gray-500">
                   Fecha

@@ -279,6 +279,12 @@ export interface MetaClienteRow {
   eus_d: number; // mismo mes del año anterior
   meta_eus: number;
   meta_sku_eus: number; // suma de plan_ventas_sku (0 si no hay desglose)
+  // Avance del mes objetivo (calculado en la app, no en el RPC)
+  ped_comprometido: number; // pedidos en estado comprometido (EUs)
+  ped_ingresado: number; // pedidos ingresados (EUs)
+  ped_facturado: number; // pedidos marcados facturados (EUs)
+  venta_real: number; // venta cargada del bottler para el mes objetivo (EUs)
+  venta_cargada: boolean; // true si el bottler del cliente ya cargó ese mes → venta_real manda
 }
 
 // Item del RPC detalle_meta_cliente (drill-down por SKU, un cliente)
