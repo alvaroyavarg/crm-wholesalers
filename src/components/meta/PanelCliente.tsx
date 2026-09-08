@@ -9,7 +9,9 @@ import {
   cerrarCompromiso,
   crearPedido,
   eliminarPedido,
+  guardarFeedbackPropuesta,
   recomendarSkusMeta,
+  resolverPropuesta,
 } from "@/app/(app)/meta/panel-actions";
 import { Chip } from "@/components/ui/Chip";
 import { FACTOR_UC_EU } from "@/lib/importar/unidades";
@@ -121,10 +123,13 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
   const [resumenPropuesta, setResumenPropuesta] = useState("");
   const [recomendando, setRecomendando] = useState(false);
   const [errorReco, setErrorReco] = useState("");
-  const [usando, setUsando] = useState<Record<string, boolean>>({});
   const [metaSkuEdits, setMetaSkuEdits] = useState<Record<string, string>>({});
   const [guardandoSku, setGuardandoSku] = useState<Record<string, boolean>>({});
-  const [usados, setUsados] = useState<Record<string, boolean>>({});
+  const [ocupado, setOcupado] = useState<Record<string, boolean>>({});
+  const [eusEdit, setEusEdit] = useState<Record<string, string>>({}); // volumen editable por propuesta
+  const [cajaAbierta, setCajaAbierta] = useState<Record<string, "rechazar" | "feedback" | null>>({});
+  const [textoCaja, setTextoCaja] = useState<Record<string, string>>({});
+  const [errorProp, setErrorProp] = useState<Record<string, string>>({});
   const [mensajes, setMensajes] = useState<MensajeChat[]>([]);
   const [conversacionId, setConversacionId] = useState<string | null>(null);
   const [inputChat, setInputChat] = useState("");
@@ -160,7 +165,8 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
     setTab("historia");
     setPropuestas([]);
     setResumenPropuesta("");
-    setUsados({});
+    setEusEdit({});
+    setCajaAbierta({});
     setMensajes([]);
     setConversacionId(null);
     cargarPanelCliente({ clienteId, fyMeta, periodoMeta, periodos })
@@ -233,30 +239,72 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
       }
       setPropuestas(r.propuestas);
       setResumenPropuesta(r.resumen);
-      setUsados({});
+      setEusEdit({});
+      setCajaAbierta({});
     } catch (e) {
       setErrorReco(e instanceof Error ? e.message : "Error del copiloto");
     } finally {
       setRecomendando(false);
     }
   }
-  async function usarPropuesta(p: PropuestaSku) {
-    const k = `${p.marca}|${p.formato}`;
-    setUsando((x) => ({ ...x, [k]: true }));
+  const claveProp = (p: PropuestaSku) => p.id ?? `${p.marca}|${p.formato}`;
+
+  // Aceptar (con el volumen propuesto o modificado) / rechazar, siempre con
+  // feedback opcional. Aceptar escribe la meta por SKU y refleja el total.
+  async function resolver(p: PropuestaSku, accion: "aceptar" | "rechazar") {
+    const k = claveProp(p);
+    if (!p.id) {
+      setErrorProp((x) => ({ ...x, [k]: "Esta propuesta no quedó guardada; pide una nueva." }));
+      return;
+    }
+    const eus = accion === "aceptar" ? Number((eusEdit[k] ?? String(p.eus)).replace(",", ".")) : undefined;
+    if (accion === "aceptar" && (!Number.isFinite(eus) || (eus as number) < 0)) {
+      setErrorProp((x) => ({ ...x, [k]: "Volumen inválido." }));
+      return;
+    }
+    const feedback = textoCaja[k] ?? "";
+    setOcupado((x) => ({ ...x, [k]: true }));
+    setErrorProp((x) => ({ ...x, [k]: "" }));
     try {
-      const total = await guardarMetaSku({ clienteId, anioFiscal: fyMeta, periodo: periodoMeta, marca: p.marca, formato: p.formato, eus: p.eus });
-      setDetalle((d) => {
-        const existe = d.some((it) => it.marca === p.marca && it.formato === p.formato);
-        return existe
-          ? d.map((it) => (it.marca === p.marca && it.formato === p.formato ? { ...it, meta_eus: p.eus } : it))
-          : [...d, { categoria: "", marca: p.marca, formato: p.formato, eus_a: 0, eus_b: 0, eus_c: 0, eus_d: 0, meta_eus: p.eus }];
+      const modificada = accion === "aceptar" && Math.round(eus as number) !== Math.round(p.eus);
+      const r = await resolverPropuesta({
+        id: p.id, clienteId, fyMeta, periodoMeta, marca: p.marca, formato: p.formato,
+        accion: accion === "rechazar" ? "rechazar" : modificada ? "modificar" : "aceptar",
+        eus, feedback,
       });
-      setUsados((x) => ({ ...x, [k]: true }));
-      onMetaSku(clienteId, p.marca, p.formato, p.eus, total);
+      if (accion === "aceptar" && r.total != null) {
+        const v = Math.round(eus as number);
+        setDetalle((d) => {
+          const existe = d.some((it) => it.marca === p.marca && it.formato === p.formato);
+          return existe
+            ? d.map((it) => (it.marca === p.marca && it.formato === p.formato ? { ...it, meta_eus: v } : it))
+            : [...d, { categoria: "", marca: p.marca, formato: p.formato, eus_a: 0, eus_b: 0, eus_c: 0, eus_d: 0, meta_eus: v }];
+        });
+        onMetaSku(clienteId, p.marca, p.formato, v, r.total);
+      }
+      setPropuestas((ps) => ps.map((x) => (claveProp(x) === k
+        ? { ...x, estado: accion === "rechazar" ? "descartada" : "aceptada", eus_final: accion === "aceptar" ? Math.round(eus as number) : x.eus_final, feedback: feedback.trim() || x.feedback }
+        : x)));
+      setCajaAbierta((x) => ({ ...x, [k]: null }));
     } catch (e) {
-      setErrorReco(e instanceof Error ? e.message : "No se pudo guardar");
+      setErrorProp((x) => ({ ...x, [k]: e instanceof Error ? e.message : "No se pudo guardar" }));
     } finally {
-      setUsando((x) => ({ ...x, [k]: false }));
+      setOcupado((x) => ({ ...x, [k]: false }));
+    }
+  }
+  async function enviarFeedback(p: PropuestaSku) {
+    const k = claveProp(p);
+    if (!p.id) return;
+    const txt = (textoCaja[k] ?? "").trim();
+    setOcupado((x) => ({ ...x, [k]: true }));
+    try {
+      await guardarFeedbackPropuesta(p.id, txt);
+      setPropuestas((ps) => ps.map((x) => (claveProp(x) === k ? { ...x, feedback: txt || null } : x)));
+      setCajaAbierta((x) => ({ ...x, [k]: null }));
+    } catch (e) {
+      setErrorProp((x) => ({ ...x, [k]: e instanceof Error ? e.message : "No se pudo guardar" }));
+    } finally {
+      setOcupado((x) => ({ ...x, [k]: false }));
     }
   }
 
@@ -409,7 +457,7 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
 
   const tabs: { id: Tab; etiqueta: string; badge?: number }[] = [
     { id: "historia", etiqueta: "Historia" },
-    { id: "copiloto", etiqueta: "Copiloto", badge: propuestas.length || undefined },
+    { id: "copiloto", etiqueta: "Copiloto", badge: propuestas.filter((p) => p.estado !== "aceptada" && p.estado !== "descartada").length || undefined },
     { id: "bitacora", etiqueta: "Bitácora", badge: compromisosPendientes.length || undefined },
     { id: "pedidos", etiqueta: "Pedidos", badge: pedidos.length || undefined },
   ];
@@ -591,35 +639,108 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
                 {resumenPropuesta && <p className="mb-2 rounded-lg bg-verde-suave px-3 py-2 text-xs text-gray-700">{resumenPropuesta}</p>}
                 <ul className="space-y-2">
                   {propuestas.map((p) => {
-                    const k = `${p.marca}|${p.formato}`;
+                    const k = claveProp(p);
+                    const resuelta = p.estado === "aceptada" || p.estado === "descartada";
+                    const valor = eusEdit[k] ?? String(Math.round(p.eus));
+                    const n = Number(valor.replace(",", "."));
+                    const modificada = Number.isFinite(n) && Math.round(n) !== Math.round(p.eus);
+                    const caja = cajaAbierta[k] ?? null;
+                    const btn = "rounded-lg px-2 py-1 text-[11px] font-medium disabled:opacity-50";
                     return (
-                      <li key={k} className="rounded-lg border border-gray-100 px-3 py-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-xs font-medium text-gray-900">
-                              {p.marca}
-                              {p.formato && <span className="text-gray-400"> · {p.formato}</span>}
-                              <span className="ml-2 text-verde">{formatEUs(p.eus)} EUs</span>
-                              <span className="ml-1 text-[10px] text-gray-400">({(p.eus / FACTOR_UC_EU).toFixed(1)} UC)</span>
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-gray-600">{p.motivo}</p>
-                            <span className="mt-1 inline-block">
-                              <Chip variante={p.evidencia === "boletin" ? "azul" : p.evidencia === "memoria" ? "ambar" : "gris"}>{p.evidencia}</Chip>
-                            </span>
+                      <li key={k} className={`rounded-lg border px-3 py-2 ${p.estado === "aceptada" ? "border-verde/40 bg-verde-suave/40" : p.estado === "descartada" ? "border-gray-100 bg-gray-50 opacity-75" : "border-gray-100"}`}>
+                        <p className="text-xs font-medium text-gray-900">
+                          {p.marca}
+                          {p.formato && <span className="text-gray-400"> · {p.formato}</span>}
+                          <span className="ml-2 text-verde">{formatEUs(p.eus)} EUs</span>
+                          <span className="ml-1 text-[10px] text-gray-400">({(p.eus / FACTOR_UC_EU).toFixed(1)} UC)</span>
+                          <span className="ml-2 inline-block align-middle">
+                            <Chip variante={p.evidencia === "boletin" ? "azul" : p.evidencia === "memoria" ? "ambar" : "gris"}>{p.evidencia}</Chip>
+                          </span>
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-gray-600">{p.motivo}</p>
+
+                        {resuelta ? (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
+                            {p.estado === "aceptada" ? (
+                              <Chip variante="verde">
+                                ✓ En la meta{p.eus_final != null && Math.round(p.eus_final) !== Math.round(p.eus) ? ` · ajustada a ${formatEUs(p.eus_final)} EUs` : ""}
+                              </Chip>
+                            ) : (
+                              <Chip variante="gris">✕ Rechazada</Chip>
+                            )}
+                            {p.feedback && <span className="text-gray-500">💬 {p.feedback}</span>}
+                            <button onClick={() => setCajaAbierta((x) => ({ ...x, [k]: caja === "feedback" ? null : "feedback" }))} className="text-gray-400 hover:text-gray-700">
+                              {p.feedback ? "editar feedback" : "+ feedback"}
+                            </button>
                           </div>
-                          <button
-                            onClick={() => usarPropuesta(p)}
-                            disabled={usando[k] || usados[k]}
-                            className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-medium ${usados[k] ? "bg-verde-suave text-verde" : "border border-gray-200 text-gray-700 hover:border-verde hover:text-verde"} disabled:opacity-60`}
-                          >
-                            {usados[k] ? "✓ En la meta" : usando[k] ? "…" : "Usar como meta SKU"}
-                          </button>
-                        </div>
+                        ) : (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <label className="flex items-center gap-1 text-[10px] text-gray-400">
+                              EUs
+                              <input
+                                value={valor}
+                                onChange={(e) => setEusEdit((x) => ({ ...x, [k]: e.target.value }))}
+                                inputMode="decimal"
+                                title="Modifica el volumen antes de aceptar"
+                                className={`w-16 rounded-md border px-1.5 py-0.5 text-right text-xs outline-none focus:border-verde ${modificada ? "border-ambar text-ambar" : "border-gray-200 text-gray-800"}`}
+                              />
+                            </label>
+                            <button onClick={() => resolver(p, "aceptar")} disabled={!!ocupado[k]} className={`${btn} bg-verde text-white hover:opacity-90`}>
+                              {ocupado[k] ? "…" : modificada ? "✓ Aceptar con ajuste" : "✓ Aceptar"}
+                            </button>
+                            <button
+                              onClick={() => setCajaAbierta((x) => ({ ...x, [k]: caja === "rechazar" ? null : "rechazar" }))}
+                              disabled={!!ocupado[k]}
+                              className={`${btn} border ${caja === "rechazar" ? "border-rojo text-rojo" : "border-gray-200 text-gray-600 hover:border-rojo hover:text-rojo"}`}
+                            >
+                              ✕ Rechazar
+                            </button>
+                            <button
+                              onClick={() => setCajaAbierta((x) => ({ ...x, [k]: caja === "feedback" ? null : "feedback" }))}
+                              disabled={!!ocupado[k]}
+                              className={`${btn} border ${caja === "feedback" ? "border-verde text-verde" : "border-gray-200 text-gray-600 hover:border-verde hover:text-verde"}`}
+                            >
+                              💬 Feedback{p.feedback ? " ✓" : ""}
+                            </button>
+                          </div>
+                        )}
+
+                        {caja && (
+                          <div className="mt-2">
+                            <textarea
+                              value={textoCaja[k] ?? p.feedback ?? ""}
+                              onChange={(e) => setTextoCaja((x) => ({ ...x, [k]: e.target.value }))}
+                              rows={2}
+                              autoFocus
+                              placeholder={
+                                caja === "rechazar"
+                                  ? "¿Por qué no? (ej: ya está stockeado, no trabaja este formato, precio fuera de mercado). El copiloto lo aprende."
+                                  : "Qué te pareció o qué cambiarías (ej: el volumen es bajo, compra este SKU cada 4 meses). El copiloto lo aprende."
+                              }
+                              className={inputCls}
+                            />
+                            <div className="mt-1 flex justify-end gap-1.5">
+                              <button onClick={() => setCajaAbierta((x) => ({ ...x, [k]: null }))} className="px-2 py-1 text-[11px] text-gray-400 hover:text-gray-700">Cancelar</button>
+                              {caja === "rechazar" ? (
+                                <button onClick={() => resolver(p, "rechazar")} disabled={!!ocupado[k]} className={`${btn} bg-rojo text-white`}>
+                                  {ocupado[k] ? "…" : "Confirmar rechazo"}
+                                </button>
+                              ) : (
+                                <button onClick={() => enviarFeedback(p)} disabled={!!ocupado[k]} className={`${btn} bg-verde text-white`}>
+                                  {ocupado[k] ? "…" : "Guardar feedback"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {errorProp[k] && <p className="mt-1 text-[11px] text-rojo">{errorProp[k]}</p>}
                       </li>
                     );
                   })}
                 </ul>
-                <p className="mt-1.5 text-[10px] text-gray-400">Al usar una propuesta, la meta total del cliente pasa a ser la suma de sus SKU.</p>
+                <p className="mt-1.5 text-[10px] text-gray-400">
+                  Aceptar escribe la meta de ese SKU (puedes cambiar el volumen antes). Lo que rechaces o comentes lo lee el copiloto en las próximas propuestas de toda la cartera.
+                </p>
               </div>
             )}
 

@@ -189,13 +189,18 @@ export interface Pedido {
   creado_at: string;
 }
 
-// Propuesta de SKU del copiloto para la meta del mes
+// Propuesta de SKU del copiloto para la meta del mes (una fila de
+// recomendaciones por SKU; el KAM la acepta, modifica o rechaza)
 export interface PropuestaSku {
+  id?: string; // id en recomendaciones (falta solo si aún no se guardó)
   marca: string;
   formato: string;
   eus: number;
   motivo: string;
   evidencia: "ventas" | "boletin" | "memoria";
+  estado?: EstadoRecomendacion;
+  eus_final?: number | null;
+  feedback?: string | null;
 }
 
 export interface Perfil {

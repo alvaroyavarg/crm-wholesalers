@@ -39,11 +39,10 @@ export async function construirSistema(
       .order("nombre", { ascending: true }),
     supabase
       .from("recomendaciones")
-      .select("texto, motivo_descarte, clientes(nombre, nombre_corto)")
-      .eq("estado", "descartada")
-      .not("motivo_descarte", "is", null)
+      .select("texto, estado, motivo_descarte, feedback, eus_propuestos, eus_final, clientes(nombre, nombre_corto)")
+      .or("motivo_descarte.not.is.null,feedback.not.is.null,eus_final.not.is.null")
       .order("creada_at", { ascending: false })
-      .limit(10),
+      .limit(15),
   ]);
 
   const conocimiento = (conocimientoRes.data ?? [])
@@ -69,11 +68,21 @@ export async function construirSistema(
         const cli = Array.isArray(rel) ? rel[0] : rel;
         const texto =
           d.texto.length > 180 ? `${d.texto.slice(0, 180)}…` : d.texto;
-        return `- [${cli?.nombre_corto ?? cli?.nombre ?? "?"}] "${texto}" → DESCARTADA porque: ${d.motivo_descarte}`;
-      });
+        const quien = cli?.nombre_corto ?? cli?.nombre ?? "?";
+        const prop = d.eus_propuestos != null ? Number(d.eus_propuestos) : null;
+        const fin = d.eus_final != null ? Number(d.eus_final) : null;
+        if (d.estado === "descartada") {
+          return `- [${quien}] "${texto}" → RECHAZADA${d.motivo_descarte ? ` porque: ${d.motivo_descarte}` : ""}${d.feedback && d.feedback !== d.motivo_descarte ? ` · feedback: ${d.feedback}` : ""}`;
+        }
+        if (prop != null && fin != null && Math.round(prop) !== Math.round(fin)) {
+          return `- [${quien}] "${texto}" → el KAM AJUSTÓ el volumen de ${Math.round(prop)} a ${Math.round(fin)} EUs${d.feedback ? ` porque: ${d.feedback}` : ""}`;
+        }
+        return `- [${quien}] "${texto}" → ACEPTADA${d.feedback ? ` · feedback: ${d.feedback}` : ""}`;
+      })
+      .filter((l) => !l.endsWith("→ ACEPTADA")); // aceptadas sin comentario no aportan
   const seccionFeedback =
     descartes.length > 0
-      ? `\n\n## Feedback del KAM — recomendaciones descartadas (no repitas estos errores)\n${descartes.join("\n")}`
+      ? `\n\n## Feedback del KAM sobre propuestas anteriores (es ley: calibra volúmenes y no repitas los mismos errores)\n${descartes.join("\n")}`
       : "";
 
   const fecha = `Hoy trabajamos en ${etiquetaPeriodo(periodo)} (${mesDePeriodo(periodo)}) de ${etiquetaFY(fy)}. Año fiscal julio–junio: P1=julio … P12=junio.`;

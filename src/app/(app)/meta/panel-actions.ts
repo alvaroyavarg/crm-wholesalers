@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { aFiscal, etiquetaMesCalendario } from "@/lib/fiscal";
 import { FACTOR_UC_EU } from "@/lib/importar/unidades";
-import type { DetalleMetaItem, EstadoPedido, Nota, Pedido, PropuestaSku } from "@/lib/types";
+import type { DetalleMetaItem, EstadoPedido, EstadoRecomendacion, Nota, Pedido, PropuestaSku } from "@/lib/types";
 
 // Acciones del panel lateral de cliente en /meta: historia por SKU,
 // recomendación de SKU del copiloto, bitácora y pedidos ingresados a mano.
@@ -69,26 +69,14 @@ export async function cargarPanelCliente(input: {
       .maybeSingle(),
     supabase
       .from("recomendaciones")
-      .select("id, texto, evidencia, creada_at")
+      .select("id, texto, evidencia, estado, eus_propuestos, eus_final, feedback, creada_at")
       .eq("cliente_id", clienteId)
-      .eq("estado", "nueva")
       .order("creada_at", { ascending: false })
-      .limit(3),
+      .limit(40),
   ]);
   if (detRes.error) throw new Error(`detalle_meta_cliente: ${detRes.error.message}`);
 
-  // Última propuesta de SKU guardada (evidencia con tipo 'meta_sku')
-  let propuestas: PropuestaSku[] = [];
-  let resumenPropuesta = "";
-  for (const r of recRes.data ?? []) {
-    const ev = Array.isArray(r.evidencia) ? (r.evidencia as { tipo: string; detalle: string; propuestas?: PropuestaSku[] }[]) : [];
-    const meta = ev.find((e) => e.tipo === "meta_sku" && Array.isArray(e.propuestas));
-    if (meta?.propuestas) {
-      propuestas = meta.propuestas;
-      resumenPropuesta = r.texto;
-      break;
-    }
-  }
+  const { propuestas, resumenPropuesta } = propuestasDesdeFilas(recRes.data ?? [], fyMeta, periodoMeta);
 
   return {
     detalle: (detRes.data ?? []) as DetalleMetaItem[],
@@ -100,6 +88,53 @@ export async function cargarPanelCliente(input: {
     perfil: perfilRes.data ?? null,
     propuestas,
     resumenPropuesta,
+  };
+}
+
+interface FilaReco {
+  id: string;
+  texto: string;
+  evidencia: unknown;
+  estado: EstadoRecomendacion;
+  eus_propuestos: number | null;
+  eus_final: number | null;
+  feedback: string | null;
+}
+interface EvidenciaMetaSku {
+  tipo: string;
+  detalle: string;
+  propuesta?: { marca: string; formato: string; eus: number; motivo: string; evidencia: PropuestaSku["evidencia"]; fy: number; periodo: number; lote: string; resumen?: string };
+}
+
+// Propuestas de SKU del mes objetivo: filas de recomendaciones con evidencia
+// 'meta_sku'. Se muestra el último lote generado (todas sus filas, con estado).
+function propuestasDesdeFilas(filas: FilaReco[], fyMeta: number, periodoMeta: number) {
+  const todas: (PropuestaSku & { lote: string; resumen?: string })[] = [];
+  for (const r of filas) {
+    const ev = Array.isArray(r.evidencia) ? (r.evidencia as EvidenciaMetaSku[]) : [];
+    const meta = ev.find((e) => e.tipo === "meta_sku" && e.propuesta);
+    const p = meta?.propuesta;
+    if (!p || p.fy !== fyMeta || p.periodo !== periodoMeta) continue;
+    todas.push({
+      id: r.id,
+      marca: p.marca,
+      formato: p.formato,
+      eus: Number(r.eus_propuestos ?? p.eus),
+      motivo: p.motivo,
+      evidencia: p.evidencia,
+      estado: r.estado,
+      eus_final: r.eus_final,
+      feedback: r.feedback,
+      lote: p.lote,
+      resumen: p.resumen,
+    });
+  }
+  if (todas.length === 0) return { propuestas: [] as PropuestaSku[], resumenPropuesta: "" };
+  const lote = todas[0].lote; // filas vienen ordenadas por creada_at desc
+  const delLote = todas.filter((t) => t.lote === lote).reverse();
+  return {
+    propuestas: delLote.map(({ lote: _l, resumen: _r, ...p }) => p),
+    resumenPropuesta: delLote.find((t) => t.resumen)?.resumen ?? "",
   };
 }
 
@@ -169,22 +204,33 @@ async function recomendarSkusMetaInterno(input: { clienteId: string; fyMeta: num
     }));
   const resumen = acortarResumen(String(parsed.resumen ?? ""));
 
-  if (propuestas.length > 0) {
-    const lineas = propuestas.map((p) => `• ${p.marca}${p.formato ? ` ${p.formato}` : ""}: ${p.eus} EUs — ${p.motivo}`);
-    await supabase.from("recomendaciones").insert({
-      cliente_id: clienteId,
-      texto: `Meta ${mes}: ${resumen}\n${lineas.join("\n")}`,
-      evidencia: [
-        { tipo: "ventas", detalle: `Historia por SKU M-3/M-2/M-1 y LY para ${mes}` },
-        { tipo: "meta_sku", detalle: `Propuesta de SKU para ${mes}`, propuestas },
-      ],
-      estado: "nueva",
-    });
+  // Una fila por SKU para que cada una se pueda aceptar / modificar / rechazar
+  // con feedback. El lote agrupa las propuestas de una misma corrida.
+  const lote = `${Date.now()}`;
+  const conId: PropuestaSku[] = [];
+  for (const [i, p] of propuestas.entries()) {
+    const { data } = await supabase
+      .from("recomendaciones")
+      .insert({
+        cliente_id: clienteId,
+        texto: `Meta ${mes} · ${p.marca}${p.formato ? ` ${p.formato}` : ""}: ${p.eus} EUs — ${p.motivo}`,
+        evidencia: [
+          { tipo: p.evidencia, detalle: p.motivo },
+          { tipo: "meta_sku", detalle: `Propuesta de SKU para ${mes}`, propuesta: { ...p, fy: fyMeta, periodo: periodoMeta, lote, resumen: i === 0 ? resumen : undefined } },
+        ],
+        estado: "nueva",
+        eus_propuestos: p.eus,
+      })
+      .select("id")
+      .single();
+    conId.push({ ...p, id: (data?.id as string | undefined) ?? undefined, estado: "nueva" });
+  }
+  if (conId.length > 0) {
     revalidatePath(`/clientes/${clienteId}`);
     revalidatePath("/copiloto");
   }
 
-  return { ok: true as const, resumen, propuestas, texto: resultado.texto };
+  return { ok: true as const, resumen, propuestas: conId, texto: resultado.texto };
 }
 
 // El modelo a veces mete la lista de SKU dentro del resumen: se corta en el
@@ -214,6 +260,57 @@ function extraerJson(texto: string): { resumen?: string; propuestas?: Partial<Pr
     }
   }
   return null;
+}
+
+// ---- Propuestas de SKU: aceptar / modificar / rechazar / feedback ----
+// aceptar y modificar escriben la meta por SKU (plan_ventas_sku) y
+// recalculan la meta total; rechazar solo marca la fila. El feedback y el
+// volumen final quedan en la fila y alimentan el system prompt del copiloto.
+export async function resolverPropuesta(input: {
+  id: string;
+  clienteId: string;
+  fyMeta: number;
+  periodoMeta: number;
+  marca: string;
+  formato: string;
+  accion: "aceptar" | "modificar" | "rechazar";
+  eus?: number; // para aceptar / modificar
+  feedback?: string;
+}) {
+  const supabase = await requerirSesion();
+  const feedback = (input.feedback ?? "").trim() || null;
+  let total: number | null = null;
+
+  if (input.accion === "rechazar") {
+    const { error } = await supabase
+      .from("recomendaciones")
+      .update({ estado: "descartada", motivo_descarte: feedback ?? "Rechazada desde el panel de Meta", feedback, resuelta_at: new Date().toISOString() })
+      .eq("id", input.id);
+    if (error) throw new Error(`resolverPropuesta: ${error.message}`);
+  } else {
+    const eus = Math.round(Number(input.eus ?? 0));
+    if (!Number.isFinite(eus) || eus < 0) throw new Error("Volumen inválido");
+    const { guardarMetaSku } = await import("@/app/(app)/actions");
+    total = await guardarMetaSku({ clienteId: input.clienteId, anioFiscal: input.fyMeta, periodo: input.periodoMeta, marca: input.marca, formato: input.formato, eus });
+    const { error } = await supabase
+      .from("recomendaciones")
+      .update({ estado: "aceptada", eus_final: eus, feedback, resuelta_at: new Date().toISOString() })
+      .eq("id", input.id);
+    if (error) throw new Error(`resolverPropuesta: ${error.message}`);
+  }
+  revalidatePath("/copiloto");
+  revalidatePath(`/clientes/${input.clienteId}`);
+  return { total };
+}
+
+export async function guardarFeedbackPropuesta(id: string, feedback: string) {
+  const supabase = await requerirSesion();
+  const { error } = await supabase
+    .from("recomendaciones")
+    .update({ feedback: feedback.trim() || null })
+    .eq("id", id);
+  if (error) throw new Error(`guardarFeedbackPropuesta: ${error.message}`);
+  revalidatePath("/copiloto");
 }
 
 // ---- Bitácora: cerrar / reabrir un compromiso ----
