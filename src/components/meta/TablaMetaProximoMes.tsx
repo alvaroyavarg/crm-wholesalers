@@ -224,7 +224,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
   // desde el panel): nueva meta total + el ítem en el desglose si está cargado.
   function aplicarMetaSku(clienteId: string, marca: string, formato: string, eus: number, total: number) {
     setEdiciones((p) => ({ ...p, [clienteId]: { eus: total > 0 ? String(Math.round(total)) : "", uc: total > 0 ? eusAUc(total) : "" } }));
-    setSkuEdits((p) => ({ ...p, [claveSku(clienteId, marca, formato)]: eus > 0 ? String(Math.round(eus)) : "" }));
+    setSkuEdits((p) => ({ ...p, [claveSku(clienteId, marca, formato)]: eus > 0 ? textoSku(eus) : "" }));
     setDetalle((p) => {
       const items = p[clienteId];
       if (!Array.isArray(items)) return p;
@@ -240,11 +240,21 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
 
   // Meta por SKU: guarda el SKU y refleja la nueva meta total del cliente
   // (la acción devuelve la suma de SKUs, que pasa a ser plan_ventas).
+  // Los inputs por SKU se escriben en la unidad activa (EU o UC); se guarda en EUs.
+  function textoSku(eus: number): string {
+    return unidad === "UC" ? String(Math.round((eus / FACTOR_UC_EU) * 10) / 10) : String(Math.round(eus));
+  }
+  function eusDesdeTexto(txt: string): number {
+    const n = Number(txt.replace(",", "."));
+    return unidad === "UC" ? n * FACTOR_UC_EU : n;
+  }
+  useEffect(() => { setSkuEdits({}); }, [unidad]); // al cambiar de unidad, los textos pendientes ya no aplican
+
   async function guardarSku(clienteId: string, marca: string, formato: string) {
     const k = claveSku(clienteId, marca, formato);
     const txt = skuEdits[k];
     if (txt === undefined) return;
-    const eus = txt.trim() === "" ? 0 : Number(txt.replace(",", "."));
+    const eus = txt.trim() === "" ? 0 : Math.round(eusDesdeTexto(txt));
     if (!Number.isFinite(eus) || eus < 0) return;
     setGuardando((p) => ({ ...p, [k]: true }));
     try {
@@ -601,8 +611,8 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                         .sort((x, y) => comparar(valorDetalle(x, ordenDet), valorDetalle(y, ordenDet), ascDet))
                         .map((it) => {
                           const k = claveSku(f.cliente_id, it.marca, it.formato);
-                          const txt = skuEdits[k] ?? (it.meta_eus > 0 ? String(Math.round(it.meta_eus)) : "");
-                          const n = Number(txt.replace(",", "."));
+                          const txt = skuEdits[k] ?? (it.meta_eus > 0 ? textoSku(Number(it.meta_eus)) : "");
+                          const nEus = txt.trim() === "" ? 0 : eusDesdeTexto(txt); // en EUs
                           return (
                             <tr key={k} className="bg-gray-50/60 text-xs">
                               {Array.from({ length: relleno }, (_, i) => <td key={i} />)}
@@ -627,7 +637,11 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                                 {guardando[k] && <span className="ml-1 text-[10px] text-gray-400">…</span>}
                               </td>}
                               {ver("ped_comprometido") && <td />}{ver("ped_ingresado") && <td />}{ver("facturado") && <td />}{ver("brecha") && <td />}
-                              {ver("meta_uc") && <td className="px-3 py-1.5 text-right text-gray-400">{Number.isFinite(n) && n > 0 ? eusAUc(n) : "—"}</td>}
+                              {ver("meta_uc") && (
+                                <td className="px-3 py-1.5 text-right text-gray-400">
+                                  {Number.isFinite(nEus) && nEus > 0 ? (unidad === "UC" ? formatoUnidad(nEus, "EU") : eusAUc(nEus)) : "—"}
+                                </td>
+                              )}
                             </tr>
                           );
                         })}
