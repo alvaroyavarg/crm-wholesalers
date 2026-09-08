@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { guardarMetaMes } from "@/app/(app)/actions";
 import { BarraAvance } from "@/components/ui/BarraAvance";
 import { Chip } from "@/components/ui/Chip";
 import { formatEUs, formatPct, pctVsLY } from "@/lib/metrics";
@@ -25,7 +24,6 @@ export function TablaMtd({
 }) {
   const [orden, setOrden] = useState<Columna>("mtd");
   const [asc, setAsc] = useState(false);
-  const [editando, setEditando] = useState<string | null>(null);
 
   const columnas: { col: Columna; etiqueta: string; alinear?: "right" }[] = [
     { col: "nombre", etiqueta: "Cliente" },
@@ -109,7 +107,6 @@ export function TablaMtd({
             const vsLy = pctVsLY(mtd, Number(f.mtd_ly_eus));
             // Al ritmo = va al menos tan avanzado como el mes con datos.
             const alRitmo = avance != null && avance >= pctTranscurrido;
-            const enEdicion = editando === f.cliente_id;
 
             return (
               <tr
@@ -156,50 +153,14 @@ export function TablaMtd({
                 </td>
 
                 <td className="px-3 py-3 text-right">
-                  {enEdicion ? (
-                    <form
-                      action={async (fd) => {
-                        await guardarMetaMes(fd);
-                        setEditando(null);
-                      }}
-                      className="flex items-center justify-end gap-1"
-                    >
-                      <input type="hidden" name="clienteId" value={f.cliente_id} />
-                      <input type="hidden" name="anioFiscal" value={fy} />
-                      <input type="hidden" name="periodo" value={periodo} />
-                      <input
-                        name="eus"
-                        type="number"
-                        min={0}
-                        step="1"
-                        defaultValue={Math.round(meta)}
-                        autoFocus
-                        className="w-24 rounded-lg border border-verde px-2 py-1 text-right text-sm outline-none"
-                      />
-                      <button
-                        type="submit"
-                        className="rounded-lg bg-verde px-2 py-1 text-xs font-medium text-white"
-                      >
-                        OK
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditando(null)}
-                        className="px-1 text-xs text-gray-400 hover:text-gray-600"
-                      >
-                        ✕
-                      </button>
-                    </form>
-                  ) : (
-                    <button
-                      onClick={() => setEditando(f.cliente_id)}
-                      title="Editar la meta de este mes"
-                      className="rounded px-1 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                    >
-                      {meta > 0 ? formatEUs(meta) : "—"}
-                      <span className="ml-1 text-[10px] text-gray-300">✎</span>
-                    </button>
-                  )}
+                  <Link
+                    href={`/meta?fy=${fy}&periodo=${periodo}`}
+                    title="La meta es la suma de las metas por SKU: se asigna en Meta próx. mes"
+                    className="rounded px-1 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  >
+                    {meta > 0 ? formatEUs(meta) : "—"}
+                    <span className="ml-1 text-[10px] text-gray-300">↗</span>
+                  </Link>
                 </td>
 
                 <td className="px-3 py-3">

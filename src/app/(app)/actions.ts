@@ -23,21 +23,55 @@ export async function guardarPlan(
   if (valores.length !== 12) throw new Error("Se esperan 12 períodos");
 
   const supabase = await createClient();
-  const filas = valores.map((eus, i) => ({
-    cliente_id: clienteId,
-    anio_fiscal: anioFiscal,
-    periodo: i + 1,
-    eus_plan: Number.isFinite(eus) && eus >= 0 ? eus : 0,
-    actualizado_at: new Date().toISOString(),
-  }));
+
+  // Regla: la meta del mes es SIEMPRE la suma de las metas por SKU. El plan
+  // anual escribe la diferencia en la línea "Sin desglose" (total − SKU ya
+  // asignados) y el trigger de la base recalcula plan_ventas.
+  const { data: skus } = await supabase
+    .from("plan_ventas_sku")
+    .select("periodo, marca, formato, eus_plan")
+    .eq("cliente_id", clienteId)
+    .eq("anio_fiscal", anioFiscal);
+  const asignado = new Map<number, number>();
+  for (const s of skus ?? []) {
+    if (s.marca === "Sin desglose" && (s.formato ?? "") === "") continue;
+    asignado.set(s.periodo, (asignado.get(s.periodo) ?? 0) + Number(s.eus_plan));
+  }
+  const filas = valores.map((eus, i) => {
+    const total = Number.isFinite(eus) && eus >= 0 ? eus : 0;
+    return {
+      cliente_id: clienteId,
+      anio_fiscal: anioFiscal,
+      periodo: i + 1,
+      marca: "Sin desglose",
+      formato: "",
+      eus_plan: Math.max(0, total - (asignado.get(i + 1) ?? 0)),
+      actualizado_at: new Date().toISOString(),
+    };
+  });
 
   const { error } = await supabase
-    .from("plan_ventas")
-    .upsert(filas, { onConflict: "cliente_id,anio_fiscal,periodo" });
-
+    .from("plan_ventas_sku")
+    .upsert(filas, { onConflict: "cliente_id,anio_fiscal,periodo,marca,formato" });
   if (error) throw new Error(`guardarPlan: ${error.message}`);
 
+  // Meses sin SKU y sin "Sin desglose" (todo en 0): asegurar la fila total en 0
+  const { error: errTot } = await supabase
+    .from("plan_ventas")
+    .upsert(
+      valores.map((eus, i) => ({
+        cliente_id: clienteId,
+        anio_fiscal: anioFiscal,
+        periodo: i + 1,
+        eus_plan: (asignado.get(i + 1) ?? 0) + filas[i].eus_plan,
+        actualizado_at: new Date().toISOString(),
+      })),
+      { onConflict: "cliente_id,anio_fiscal,periodo" },
+    );
+  if (errTot) throw new Error(`guardarPlan: ${errTot.message}`);
+
   revalidatePath("/plan");
+  revalidatePath("/meta");
   revalidatePath("/");
 }
 

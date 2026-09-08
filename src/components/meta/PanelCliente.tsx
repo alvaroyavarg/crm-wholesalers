@@ -125,6 +125,16 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
   const [recomendando, setRecomendando] = useState(false);
   const [errorReco, setErrorReco] = useState("");
   const [metaSkuEdits, setMetaSkuEdits] = useState<Record<string, string>>({});
+  const [nuevoSkuSel, setNuevoSkuSel] = useState("");
+  function agregarSkuHistoria() {
+    if (!nuevoSkuSel) return;
+    const [marca, formato] = nuevoSkuSel.split("|");
+    const cat = catalogo.find((c) => c.marca === marca && c.formato === formato);
+    setDetalle((d) => (d.some((it) => it.marca === marca && it.formato === formato)
+      ? d
+      : [{ categoria: cat?.categoria ?? "", marca, formato, eus_a: 0, eus_b: 0, eus_c: 0, eus_d: 0, meta_eus: 0 }, ...d]));
+    setNuevoSkuSel("");
+  }
   const [guardandoSku, setGuardandoSku] = useState<Record<string, boolean>>({});
   const [ocupado, setOcupado] = useState<Record<string, boolean>>({});
   const [eusEdit, setEusEdit] = useState<Record<string, string>>({}); // volumen editable por propuesta
@@ -624,8 +634,21 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
                 </tfoot>
               </table>
             )}
+            {!fila.es_otros && (
+              <div className="mt-3 flex items-center gap-2">
+                <select value={nuevoSkuSel} onChange={(e) => setNuevoSkuSel(e.target.value)} className={inputCls}>
+                  <option value="">+ Agregar SKU a la meta…</option>
+                  {catalogo
+                    .filter((c) => !detalle.some((it) => it.marca === c.marca && it.formato === c.formato))
+                    .map((c) => (
+                      <option key={`${c.marca}|${c.formato}`} value={`${c.marca}|${c.formato}`}>{c.marca}{c.formato ? ` · ${c.formato}` : ""}</option>
+                    ))}
+                </select>
+                <button onClick={agregarSkuHistoria} disabled={!nuevoSkuSel} className="shrink-0 rounded-lg bg-verde px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">Agregar</button>
+              </div>
+            )}
             <p className="mt-3 text-[10px] text-gray-400">
-              La columna Meta se edita aquí mismo (EUs por SKU). En pantalla chica se ocultan {etiquetas.a} y {etiquetas.b}; gira el teléfono para verlos.
+              La meta del cliente es la suma de la columna Meta (EUs por SKU); “Sin desglose” es lo que aún no está repartido. En pantalla chica se ocultan {etiquetas.a} y {etiquetas.b}; gira el teléfono para verlos.
               {" "}Señales: <b>compraba LY</b> = tenía compra el mismo mes del año pasado y nada en los últimos 3 meses ·{" "}
               <b>cae vs LY</b> = promedio de los últimos 3 meses bajo dos tercios del LY · <b>nuevo</b> = compra este año sin LY.
             </p>

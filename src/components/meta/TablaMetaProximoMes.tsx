@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
-import { guardarMetaMes, guardarMetaSku, obtenerDetalleMeta } from "@/app/(app)/actions";
+import { guardarMetaSku, obtenerDetalleMeta } from "@/app/(app)/actions";
 import { formatoUnidad, SwitchUnidad, usePublicarAvance, useUnidad } from "@/components/meta/MetaAvance";
 import { PanelCliente } from "@/components/meta/PanelCliente";
 import { Chip } from "@/components/ui/Chip";
@@ -200,38 +200,6 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
       }
     );
   }
-  function cambiarEus(clienteId: string, valor: string) {
-    const n = Number(valor.replace(",", "."));
-    setEdiciones((p) => ({
-      ...p,
-      [clienteId]: { eus: valor, uc: valor.trim() === "" || !Number.isFinite(n) ? "" : eusAUc(n) },
-    }));
-  }
-  function cambiarUc(clienteId: string, valor: string) {
-    const n = Number(valor.replace(",", "."));
-    setEdiciones((p) => ({
-      ...p,
-      [clienteId]: { uc: valor, eus: valor.trim() === "" || !Number.isFinite(n) ? "" : ucAEus(n) },
-    }));
-  }
-  async function guardarTotal(clienteId: string) {
-    const e = ediciones[clienteId];
-    if (!e) return;
-    const eus = Number(e.eus.replace(",", "."));
-    if (!Number.isFinite(eus) || eus < 0) return;
-    setGuardando((p) => ({ ...p, [clienteId]: true }));
-    const fd = new FormData();
-    fd.set("clienteId", clienteId);
-    fd.set("anioFiscal", String(fyMeta));
-    fd.set("periodo", String(periodoMeta));
-    fd.set("eus", String(eus));
-    try {
-      await guardarMetaMes(fd);
-    } finally {
-      setGuardando((p) => ({ ...p, [clienteId]: false }));
-    }
-  }
-
   function cargarDetalle(clienteId: string) {
     setDetalle((p) => ({ ...p, [clienteId]: "cargando" }));
     startTransition(async () => {
@@ -467,30 +435,12 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                   {m > 0 && <span className={`ml-2 font-medium ${brechaDe(fp, m) <= 0 ? "text-verde" : "text-ambar"}`}>brecha {fmt(brechaDe(fp, m))}</span>}
                 </p>
               ) : null; })()}
-              <div className="mt-2 flex items-center gap-2">
-                <label className="flex flex-1 items-center gap-1.5 whitespace-nowrap text-[11px] text-gray-500">
-                  Meta EUs
-                  <input
-                    value={edicion.eus}
-                    onChange={(e) => cambiarEus(f.cliente_id, e.target.value)}
-                    onBlur={() => guardarTotal(f.cliente_id)}
-                    placeholder="—"
-                    inputMode="decimal"
-                    className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1 text-right text-sm outline-none focus:border-verde"
-                  />
-                </label>
-                <label className="flex flex-1 items-center gap-1.5 text-[11px] text-gray-500">
-                  UC
-                  <input
-                    value={edicion.uc}
-                    onChange={(e) => cambiarUc(f.cliente_id, e.target.value)}
-                    onBlur={() => guardarTotal(f.cliente_id)}
-                    placeholder="—"
-                    inputMode="decimal"
-                    className="w-full min-w-0 rounded-lg border border-gray-200 px-2 py-1 text-right text-sm outline-none focus:border-verde"
-                  />
-                </label>
-                {guardando[f.cliente_id] && <span className="text-[10px] text-gray-400">…</span>}
+              <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-gray-500">
+                <span>
+                  Meta <b className="text-sm text-gray-900">{Number(edicion.eus) > 0 ? fmt(Number(edicion.eus)) : "—"}</b> {unidad}
+                  {Number(edicion.eus) > 0 && <span className="ml-1 text-gray-400">({unidad === "UC" ? `${formatoUnidad(Number(edicion.eus), "EU")} EU` : `${edicion.uc} UC`})</span>}
+                </span>
+                <button onClick={() => setPanelId(f.cliente_id)} className="text-verde">asignar por SKU ›</button>
               </div>
             </li>
           );
@@ -596,21 +546,19 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                     {ver("eus_b") && <td className="px-3 py-3 text-right text-gray-700">{fmt(f.eus_b)}</td>}
                     {ver("eus_c") && <td className="px-3 py-3 text-right text-gray-700">{fmt(f.eus_c)}</td>}
                     {ver("eus_d") && <td className="px-3 py-3 text-right text-gray-500">{fmt(f.eus_d)}</td>}
-                    {ver("meta_eus") && <td className="px-3 py-3 text-right">
-                      <input
-                        value={unidad === "UC" ? edicion.uc : edicion.eus}
-                        onChange={(e) => (unidad === "UC" ? cambiarUc : cambiarEus)(f.cliente_id, e.target.value)}
-                        onBlur={() => guardarTotal(f.cliente_id)}
-                        placeholder="—"
-                        inputMode="decimal"
-                        className="w-20 rounded-lg border border-gray-200 px-2 py-1 text-right text-sm outline-none focus:border-verde"
-                      />
-                      {desglosado && Math.round(sumaSku) !== Math.round(metaTotal) && (
-                        <div className="mt-0.5 text-[10px] text-ambar" title="La suma de las metas por SKU no coincide con la meta total">
-                          SKU suman {fmt(sumaSku)}
-                        </div>
-                      )}
-                    </td>}
+                    {ver("meta_eus") && (
+                      <td className="px-3 py-3 text-right" title="La meta es la suma de las metas por SKU: ábrelo con la flecha o el panel para asignarla">
+                        <button onClick={() => toggleExpandir(f)} className={`rounded px-1.5 py-0.5 font-medium hover:bg-gray-100 ${metaTotal > 0 ? "text-gray-900" : "text-gray-300"}`}>
+                          {metaTotal > 0 ? fmt(metaTotal) : "—"}
+                          <span className="ml-1 text-[10px] text-gray-300">▾</span>
+                        </button>
+                        {desglosado && Math.round(sumaSku) !== Math.round(metaTotal) && (
+                          <div className="mt-0.5 text-[10px] text-ambar" title="La meta total no coincide con la suma de SKU: corre la migración 0023 o vuelve a guardar un SKU">
+                            SKU suman {fmt(sumaSku)}
+                          </div>
+                        )}
+                      </td>
+                    )}
                     {ver("ped_comprometido") && <td className="px-3 py-3 text-right text-gray-500">{Number(fp.ped_comprometido) > 0 ? fmt(fp.ped_comprometido) : "—"}</td>}
                     {ver("ped_ingresado") && <td className="px-3 py-3 text-right text-gray-500">{Number(fp.ped_ingresado) > 0 ? fmt(fp.ped_ingresado) : "—"}</td>}
                     {ver("facturado") && (
@@ -624,17 +572,11 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                         {metaTotal > 0 ? fmt(b) : "—"}
                       </td>
                     ); })()}
-                    {ver("meta_uc") && <td className="px-3 py-3 text-right">
-                      <input
-                        value={unidad === "UC" ? edicion.eus : edicion.uc}
-                        onChange={(e) => (unidad === "UC" ? cambiarEus : cambiarUc)(f.cliente_id, e.target.value)}
-                        onBlur={() => guardarTotal(f.cliente_id)}
-                        placeholder="—"
-                        inputMode="decimal"
-                        className="w-20 rounded-lg border border-gray-200 px-2 py-1 text-right text-sm outline-none focus:border-verde"
-                      />
-                      {guardando[f.cliente_id] && <span className="ml-1 text-[10px] text-gray-400">…</span>}
-                    </td>}
+                    {ver("meta_uc") && (
+                      <td className="px-3 py-3 text-right text-gray-500">
+                        {metaTotal > 0 ? (unidad === "UC" ? formatoUnidad(metaTotal, "EU") : edicion.uc) : "—"}
+                      </td>
+                    )}
                   </tr>
 
                   {abierto && (items === "cargando" || items === undefined) && (
@@ -700,7 +642,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                               ))}
                             </select>
                             <button onClick={() => agregarSku(f.cliente_id)} disabled={!nuevoSku[f.cliente_id]} className="rounded-lg bg-verde px-2 py-1 text-xs font-medium text-white disabled:opacity-40">Agregar</button>
-                            <span className="text-[11px] text-gray-400">Al guardar una meta por SKU, la meta total pasa a ser la suma de los SKUs. Si preferís, escribí solo el total arriba.</span>
+                            <span className="text-[11px] text-gray-400">La meta del cliente es la suma de estas líneas. “Sin desglose” es lo que aún no está repartido por SKU: bájalo a medida que asignes.</span>
                           </div>
                         </td>
                       </tr>
