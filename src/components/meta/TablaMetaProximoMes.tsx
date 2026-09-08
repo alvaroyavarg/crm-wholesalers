@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { guardarMetaMes, guardarMetaSku, obtenerDetalleMeta } from "@/app/(app)/actions";
 import { PanelCliente } from "@/components/meta/PanelCliente";
 import { Chip } from "@/components/ui/Chip";
@@ -35,7 +35,22 @@ interface EdicionMeta {
   uc: string;
 }
 
-const NUM_COLS = 12; // chevron + 10 columnas (incl. Meta) + Meta UC
+// Columnas que se pueden ocultar (Cliente siempre visible). Se recuerda en
+// el navegador.
+type ColumnaOcultable = Exclude<Columna, "nombre"> | "meta_uc";
+const OCULTABLES: { col: ColumnaOcultable; etiqueta: string }[] = [
+  { col: "cod", etiqueta: "ID cliente" },
+  { col: "bottler", etiqueta: "Distribuidor" },
+  { col: "zona", etiqueta: "Zona" },
+  { col: "desarrollador", etiqueta: "Desarrollador" },
+  { col: "eus_a", etiqueta: "Mes -3" },
+  { col: "eus_b", etiqueta: "Mes -2" },
+  { col: "eus_c", etiqueta: "Mes -1" },
+  { col: "eus_d", etiqueta: "Mismo mes LY" },
+  { col: "meta_eus", etiqueta: "Meta" },
+  { col: "meta_uc", etiqueta: "Meta UC" },
+];
+const CLAVE_COLUMNAS = "crm.meta.columnasOcultas";
 
 function etiquetaBottler(b: string | null): string {
   return b === "KOA" ? "Andina" : b === "KOE" ? "Embonor" : "—";
@@ -70,6 +85,32 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
   const [skuEdits, setSkuEdits] = useState<Record<string, string>>({});
   const [nuevoSku, setNuevoSku] = useState<Record<string, string>>({});
   const [panelId, setPanelId] = useState<string | null>(null);
+  // ---- columnas visibles ----
+  const [ocultas, setOcultas] = useState<Set<ColumnaOcultable>>(new Set());
+  const [menuColumnas, setMenuColumnas] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CLAVE_COLUMNAS);
+      if (raw) setOcultas(new Set(JSON.parse(raw) as ColumnaOcultable[]));
+    } catch { /* sin preferencia guardada */ }
+  }, []);
+  function alternarColumna(col: ColumnaOcultable) {
+    setOcultas((prev) => {
+      const s = new Set(prev);
+      if (s.has(col)) s.delete(col); else s.add(col);
+      try { localStorage.setItem(CLAVE_COLUMNAS, JSON.stringify([...s])); } catch { /* sin storage */ }
+      return s;
+    });
+  }
+  function fijarOcultas(cols: ColumnaOcultable[]) {
+    const s = new Set(cols);
+    setOcultas(s);
+    try { localStorage.setItem(CLAVE_COLUMNAS, JSON.stringify(cols)); } catch { /* sin storage */ }
+  }
+  const ver = (col: ColumnaOcultable) => !ocultas.has(col);
+  // celdas vacías que preceden al SKU en las filas de desglose: chevron + columnas de texto visibles
+  const relleno = 1 + (["cod", "bottler", "zona", "desarrollador"] as ColumnaOcultable[]).filter(ver).length;
+  const numCols = 2 + OCULTABLES.filter((c) => ver(c.col)).length; // chevron + Cliente + visibles
   const [, startTransition] = useTransition();
   const filaPanel = panelId ? filas.find((f) => f.cliente_id === panelId) ?? null : null;
 
@@ -281,6 +322,32 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
           </button>
         )}
         <span className="ml-auto text-xs text-gray-400">{visibles.length} de {filas.length}</span>
+        <div className="relative hidden lg:block">
+          <button
+            onClick={() => setMenuColumnas((v) => !v)}
+            className={`${selectCls} ${ocultas.size > 0 ? "border-verde text-verde" : ""}`}
+            title="Mostrar u ocultar columnas"
+          >
+            ⚙ Columnas{ocultas.size > 0 ? ` (${ocultas.size} ocultas)` : ""}
+          </button>
+          {menuColumnas && <div className="fixed inset-0 z-10" onClick={() => setMenuColumnas(false)} />}
+          {menuColumnas && (
+            <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-gray-200 bg-white p-2 text-xs shadow-lg">
+              {OCULTABLES.map((c) => (
+                <label key={c.col} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 hover:bg-gray-50">
+                  <input type="checkbox" checked={ver(c.col)} onChange={() => alternarColumna(c.col)} />
+                  <span className="text-gray-700">
+                    {c.col === "eus_a" ? etiquetas.a : c.col === "eus_b" ? etiquetas.b : c.col === "eus_c" ? etiquetas.c : c.col === "eus_d" ? `${etiquetas.d} (LY)` : c.etiqueta}
+                  </span>
+                </label>
+              ))}
+              <div className="mt-1 flex justify-between gap-1 border-t border-gray-100 pt-1.5">
+                <button onClick={() => fijarOcultas(["cod", "bottler", "zona", "desarrollador"])} className="rounded px-1.5 py-1 text-gray-500 hover:bg-gray-50 hover:text-gray-800">Solo ventas y meta</button>
+                <button onClick={() => fijarOcultas([])} className="rounded px-1.5 py-1 text-gray-500 hover:bg-gray-50 hover:text-gray-800">Todas</button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ---- Móvil: tarjetas (la tabla de 12 columnas no cabe) ---- */}
@@ -350,11 +417,11 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
 
       {/* ---- Escritorio: tabla completa ---- */}
       <div className="hidden overflow-x-auto lg:block">
-        <table className="w-full min-w-[1180px] text-sm">
+        <table className={`w-full text-sm ${ocultas.size >= 4 ? "min-w-[760px]" : "min-w-[1180px]"}`}>
           <thead>
             <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
               <th className="w-8 px-2 py-3" />
-              {columnas.map((c) => (
+              {columnas.filter((c) => c.col === "nombre" || ver(c.col)).map((c) => (
                 <th
                   key={c.col}
                   onClick={() => ordenarPor(c.col)}
@@ -365,9 +432,11 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                   {indicador(orden === c.col, asc)}
                 </th>
               ))}
-              <th className="px-3 py-3 text-right font-medium" title="Meta en cajas del bottler (UC), derivada con el factor estándar EU = UC × 5,678/9">
-                Meta UC
-              </th>
+              {ver("meta_uc") && (
+                <th className="px-3 py-3 text-right font-medium" title="Meta en cajas del bottler (UC), derivada con el factor estándar EU = UC × 5,678/9">
+                  Meta UC
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -389,13 +458,15 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                         {abierto ? "▾" : "▸"}
                       </button>
                     </td>
-                    <td className="px-3 py-3 font-mono text-xs text-gray-500">{f.es_otros ? "—" : (f.cod_diageo ?? "—")}</td>
-                    <td className="px-3 py-3 text-gray-600">
-                      {etiquetaBottler(f.bottler)}
-                      {f.es_frontera && <span className="ml-1.5 align-middle"><Chip variante="ambar">frontera</Chip></span>}
-                    </td>
-                    <td className="px-3 py-3 text-gray-600">{f.zona ?? "—"}</td>
-                    <td className="px-3 py-3 text-gray-600">{f.desarrollador ?? "—"}</td>
+                    {ver("cod") && <td className="px-3 py-3 font-mono text-xs text-gray-500">{f.es_otros ? "—" : (f.cod_diageo ?? "—")}</td>}
+                    {ver("bottler") && (
+                      <td className="px-3 py-3 text-gray-600">
+                        {etiquetaBottler(f.bottler)}
+                        {f.es_frontera && <span className="ml-1.5 align-middle"><Chip variante="ambar">frontera</Chip></span>}
+                      </td>
+                    )}
+                    {ver("zona") && <td className="px-3 py-3 text-gray-600">{f.zona ?? "—"}</td>}
+                    {ver("desarrollador") && <td className="px-3 py-3 text-gray-600">{f.desarrollador ?? "—"}</td>}
                     <td className="px-3 py-3">
                       <button
                         onClick={() => setPanelId(f.cliente_id)}
@@ -411,11 +482,11 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                         <span className="ml-2 align-middle"><Chip variante="azul">TOP3</Chip></span>
                       ) : null}
                     </td>
-                    <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_a)}</td>
-                    <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_b)}</td>
-                    <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_c)}</td>
-                    <td className="px-3 py-3 text-right text-gray-500">{formatEUs(f.eus_d)}</td>
-                    <td className="px-3 py-3 text-right">
+                    {ver("eus_a") && <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_a)}</td>}
+                    {ver("eus_b") && <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_b)}</td>}
+                    {ver("eus_c") && <td className="px-3 py-3 text-right text-gray-700">{formatEUs(f.eus_c)}</td>}
+                    {ver("eus_d") && <td className="px-3 py-3 text-right text-gray-500">{formatEUs(f.eus_d)}</td>}
+                    {ver("meta_eus") && <td className="px-3 py-3 text-right">
                       <input
                         value={edicion.eus}
                         onChange={(e) => cambiarEus(f.cliente_id, e.target.value)}
@@ -429,8 +500,8 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                           SKU suman {formatEUs(sumaSku)}
                         </div>
                       )}
-                    </td>
-                    <td className="px-3 py-3 text-right">
+                    </td>}
+                    {ver("meta_uc") && <td className="px-3 py-3 text-right">
                       <input
                         value={edicion.uc}
                         onChange={(e) => cambiarUc(f.cliente_id, e.target.value)}
@@ -440,23 +511,25 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                         className="w-20 rounded-lg border border-gray-200 px-2 py-1 text-right text-sm outline-none focus:border-verde"
                       />
                       {guardando[f.cliente_id] && <span className="ml-1 text-[10px] text-gray-400">…</span>}
-                    </td>
+                    </td>}
                   </tr>
 
                   {abierto && (items === "cargando" || items === undefined) && (
-                    <tr className="bg-gray-50/60"><td colSpan={NUM_COLS} className="px-5 py-3 text-xs text-gray-400">Cargando compra por SKU…</td></tr>
+                    <tr className="bg-gray-50/60"><td colSpan={numCols} className="px-5 py-3 text-xs text-gray-400">Cargando compra por SKU…</td></tr>
                   )}
 
                   {abierto && Array.isArray(items) && (
                     <>
                       <tr className="bg-gray-50/60 text-[11px] text-gray-400">
-                        <td /><td /><td /><td /><td />
-                        {([["sku", "SKU"], ["eus_a", etiquetas.a], ["eus_b", etiquetas.b], ["eus_c", etiquetas.c], ["eus_d", `${etiquetas.d} (LY)`], ["meta_eus", "Meta SKU"]] as [ColumnaDetalle, string][]).map(([col, et]) => (
+                        {Array.from({ length: relleno }, (_, i) => <td key={i} />)}
+                        {([["sku", "SKU"], ["eus_a", etiquetas.a], ["eus_b", etiquetas.b], ["eus_c", etiquetas.c], ["eus_d", `${etiquetas.d} (LY)`], ["meta_eus", "Meta SKU"]] as [ColumnaDetalle, string][])
+                          .filter(([col]) => col === "sku" || ver(col as ColumnaOcultable))
+                          .map(([col, et]) => (
                           <td key={col} onClick={() => ordenarDetalle(col)} className={`cursor-pointer select-none px-3 py-1.5 font-medium hover:text-gray-600 ${col === "sku" ? "" : "text-right"}`}>
                             {et}{indicador(ordenDet === col, ascDet)}
                           </td>
                         ))}
-                        <td className="px-3 py-1.5 text-right font-medium">UC</td>
+                        {ver("meta_uc") && <td className="px-3 py-1.5 text-right font-medium">UC</td>}
                       </tr>
                       {[...items]
                         .sort((x, y) => comparar(valorDetalle(x, ordenDet), valorDetalle(y, ordenDet), ascDet))
@@ -466,17 +539,17 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                           const n = Number(txt.replace(",", "."));
                           return (
                             <tr key={k} className="bg-gray-50/60 text-xs">
-                              <td /><td /><td /><td /><td />
+                              {Array.from({ length: relleno }, (_, i) => <td key={i} />)}
                               <td className="px-3 py-1.5 text-gray-700">
                                 {it.marca}
                                 {it.formato && <span className="text-gray-400"> · {it.formato}</span>}
                                 {it.categoria && <span className="ml-1.5 text-[10px] text-gray-300">{it.categoria}</span>}
                               </td>
-                              <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_a)}</td>
-                              <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_b)}</td>
-                              <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_c)}</td>
-                              <td className="px-3 py-1.5 text-right text-gray-400">{formatEUs(it.eus_d)}</td>
-                              <td className="px-3 py-1.5 text-right">
+                              {ver("eus_a") && <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_a)}</td>}
+                              {ver("eus_b") && <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_b)}</td>}
+                              {ver("eus_c") && <td className="px-3 py-1.5 text-right text-gray-600">{formatEUs(it.eus_c)}</td>}
+                              {ver("eus_d") && <td className="px-3 py-1.5 text-right text-gray-400">{formatEUs(it.eus_d)}</td>}
+                              {ver("meta_eus") && <td className="px-3 py-1.5 text-right">
                                 <input
                                   value={txt}
                                   onChange={(e) => setSkuEdits((p) => ({ ...p, [k]: e.target.value }))}
@@ -486,14 +559,14 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                                   className="w-16 rounded-lg border border-gray-200 px-2 py-0.5 text-right text-xs outline-none focus:border-verde"
                                 />
                                 {guardando[k] && <span className="ml-1 text-[10px] text-gray-400">…</span>}
-                              </td>
-                              <td className="px-3 py-1.5 text-right text-gray-400">{Number.isFinite(n) && n > 0 ? eusAUc(n) : "—"}</td>
+                              </td>}
+                              {ver("meta_uc") && <td className="px-3 py-1.5 text-right text-gray-400">{Number.isFinite(n) && n > 0 ? eusAUc(n) : "—"}</td>}
                             </tr>
                           );
                         })}
                       <tr className="bg-gray-50/60 text-xs">
-                        <td /><td /><td /><td /><td />
-                        <td colSpan={7} className="px-3 py-2">
+                        {Array.from({ length: relleno }, (_, i) => <td key={i} />)}
+                        <td colSpan={numCols - relleno} className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             <select value={nuevoSku[f.cliente_id] ?? ""} onChange={(e) => setNuevoSku((p) => ({ ...p, [f.cliente_id]: e.target.value }))} className={selectCls}>
                               <option value="">+ Agregar SKU a la meta…</option>
