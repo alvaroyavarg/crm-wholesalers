@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { guardarMetaMes, guardarMetaSku, obtenerDetalleMeta } from "@/app/(app)/actions";
+import { usePublicarAvance } from "@/components/meta/MetaAvance";
 import { PanelCliente } from "@/components/meta/PanelCliente";
 import { Chip } from "@/components/ui/Chip";
 import { FACTOR_UC_EU } from "@/lib/importar/unidades";
@@ -142,6 +143,25 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
   const etiquetaBrecha = descuentos.size === 0
     ? "Brecha = Meta"
     : `Meta − ${DESCUENTOS.filter((d) => descuentos.has(d.col)).map((d) => d.corta).join(" − ")}`;
+
+  // Publicar el resumen grande (toda la cartera, con cifras vivas)
+  const publicar = usePublicarAvance();
+  useEffect(() => {
+    if (!publicar) return;
+    const todas = filas.map(conPedidos);
+    const metaDe = (f: MetaClienteRow) => Number(ediciones[f.cliente_id]?.eus ?? f.meta_eus) || 0;
+    publicar({
+      meta: todas.reduce((s, f) => s + metaDe(f), 0),
+      comprometido: todas.reduce((s, f) => s + Number(f.ped_comprometido), 0),
+      ingresado: todas.reduce((s, f) => s + Number(f.ped_ingresado), 0),
+      facturado: todas.reduce((s, f) => s + facturadoDe(f), 0),
+      brecha: todas.reduce((s, f) => s + brechaDe(f, metaDe(f)), 0),
+      etiquetaBrecha,
+      conVentaReal: todas.filter((f) => f.venta_cargada).length,
+      cuentas: todas.length,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filas, ediciones, pedidosLocal, descuentos]);
   function alternarColumna(col: ColumnaOcultable) {
     setOcultas((prev) => {
       const s = new Set(prev);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { KpiCard } from "@/components/ui/KpiCard";
+import { KpisAvance, MetaAvanceProvider } from "@/components/meta/MetaAvance";
 import { TablaMetaProximoMes } from "@/components/meta/TablaMetaProximoMes";
 import { etiquetaMesCalendario, fiscalActual, sumarPeriodos } from "@/lib/fiscal";
 import { formatEUs } from "@/lib/metrics";
@@ -56,7 +57,7 @@ export default async function MetaPage({
   const sinMeta = clientes.length - conMeta;
 
   return (
-    <div>
+    <MetaAvanceProvider>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-semibold text-gray-900">
@@ -102,6 +103,9 @@ export default async function MetaPage({
           </Link>
         </div>
       </div>
+
+      {/* Resumen grande: meta, pedidos por estado y brecha (cifras vivas desde la tabla) */}
+      <KpisAvance etiquetaMes={etiquetaMeta} />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <KpiCard icono="📦" etiqueta={etiquetas.a} valor={`${formatEUs(totalA)} EUs`} />
@@ -163,6 +167,6 @@ export default async function MetaPage({
           no ajusta por el mix de Smirnoff Ice del cliente, que lleva un divisor propio.
         </p>
       </Card>
-    </div>
+    </MetaAvanceProvider>
   );
 }
