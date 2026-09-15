@@ -452,7 +452,11 @@ export async function getHistoriaSkuMeta(
 
   const metaSku = items.reduce((s, it) => s + Number(it.meta_sku_eus), 0);
   const pedTot = (estado: string) => r0(pedidos.filter((p) => p.estado === estado).reduce((s, p) => s + Number(p.eus), 0));
-  const facturadoEfectivo = ventaCargada ? ventaRealTotal : pedidos.filter((p) => p.estado === "facturado").reduce((s, p) => s + Number(p.eus), 0);
+  // Pedidos facturados con fecha posterior al corte del bottler no vienen en la venta real: se suman.
+  const facturadosPostCorte = ventaCargada
+    ? pedidos.filter((p) => p.estado === "facturado" && cargaBottler != null && p.fecha > cargaBottler).reduce((s, p) => s + Number(p.eus), 0)
+    : 0;
+  const facturadoEfectivo = ventaCargada ? ventaRealTotal + facturadosPostCorte : pedidos.filter((p) => p.estado === "facturado").reduce((s, p) => s + Number(p.eus), 0);
 
   return {
     cliente: cliRes.data?.nombre_corto ?? cliRes.data?.nombre,
@@ -475,7 +479,7 @@ export async function getHistoriaSkuMeta(
       facturado_eus: r0(facturadoEfectivo),
       brecha_eus: r0(Number(planRes.data?.eus_plan ?? 0) - facturadoEfectivo),
       regla: ventaCargada
-        ? "El bottler ya cargó el mes: la venta real es la única verdad; un pedido facturado que no aparece en la venta vale 0."
+        ? `El bottler ya cargó el mes hasta el ${cargaBottler}: la venta real es la única verdad; un pedido facturado con fecha anterior al corte ya viene en la venta (no se suma); uno posterior al corte sí se suma.`
         : "El bottler aún no carga el mes: facturado = pedidos marcados facturados; el avance es provisorio.",
     },
     total_3m_promedio: r0(items.reduce((s, it) => s + Number(it.promedio_3m), 0)),
