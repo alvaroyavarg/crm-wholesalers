@@ -259,6 +259,22 @@ export interface MtdBottlerRow {
   clientes: number;
 }
 
+// ---- Dashboard del mes ----
+export interface CompromisoPendiente {
+  id: string;
+  cliente_id: string;
+  cliente: string;
+  contenido: string;
+  fecha: string;
+  vence: string | null;
+  vencido: boolean;
+}
+
+export interface CorteBottler {
+  origen: string; // KOA / KOE
+  fecha_corte: string | null; // null = ese bottler no cargó el mes
+}
+
 // ---- Meta del mes actual (o el que se elija) ----
 
 // Fila del RPC resumen_meta_periodo

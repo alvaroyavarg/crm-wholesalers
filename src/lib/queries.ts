@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { aFiscal, fiscalActual, sumarPeriodos } from "./fiscal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
+  CompromisoPendiente,
+  CorteBottler,
   Boletin,
   CeldaPlanRow,
   Cliente,
@@ -301,6 +303,73 @@ export async function mtdCompleto() {
     bottlers: (bottlers.data ?? []) as MtdBottlerRow[],
     cargas: (cargas.data ?? []) as Importacion[],
   };
+}
+
+// ---- Dashboard: portada del mes actual sobre las mismas fuentes que /meta ----
+export async function dashboardMes() {
+  const supabase = await createClient();
+  const meta = await metaProximoMes(); // mes fiscal actual: meta Σ SKU, pedidos, venta real, Otros
+  const { fyMeta: fy, periodoMeta: periodo } = meta;
+
+  const [cargasRes, ytdRes, compRes, propRes] = await Promise.all([
+    supabase.from("importaciones").select("origen, fecha_corte").eq("anio_fiscal", fy).eq("periodo", periodo),
+    supabase.rpc("ytd_por_cliente", { p_fy: fy, p_periodo: periodo }),
+    supabase
+      .from("notas")
+      .select("id, cliente_id, contenido_raw, fecha, vence, clientes(nombre, nombre_corto)")
+      .eq("tipo", "compromiso")
+      .is("cerrada_at", null)
+      .order("vence", { ascending: true, nullsFirst: false })
+      .limit(20),
+    supabase
+      .from("recomendaciones")
+      .select("cliente_id, evidencia")
+      .eq("estado", "nueva")
+      .order("creada_at", { ascending: false })
+      .limit(300),
+  ]);
+
+  // Fecha de corte por bottler (null = no cargó el mes)
+  const cortes: CorteBottler[] = ["KOA", "KOE"].map((o) => {
+    const fechas = (cargasRes.error ? [] : (cargasRes.data ?? []))
+      .filter((c) => c.origen === o)
+      .map((c) => c.fecha_corte as string)
+      .sort();
+    return { origen: o, fecha_corte: fechas.length ? fechas[fechas.length - 1] : null };
+  });
+
+  // YTD vs LY (si la migración 0024 aún no corre, queda vacío y la UI lo omite)
+  const ytd = new Map<string, { ytd: number; ytdLy: number }>();
+  for (const r of ytdRes.error ? [] : ((ytdRes.data ?? []) as { cliente_id: string; ytd_eus: number; ytd_ly_eus: number }[])) {
+    ytd.set(r.cliente_id, { ytd: Number(r.ytd_eus), ytdLy: Number(r.ytd_ly_eus) });
+  }
+
+  const hoy = new Date();
+  const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+  const compromisos: CompromisoPendiente[] = (compRes.error ? [] : (compRes.data ?? [])).map((n) => {
+    const rel = n.clientes as { nombre: string; nombre_corto: string | null } | { nombre: string; nombre_corto: string | null }[] | null;
+    const cli = Array.isArray(rel) ? rel[0] : rel;
+    return {
+      id: n.id as string,
+      cliente_id: n.cliente_id as string,
+      cliente: cli?.nombre_corto ?? cli?.nombre ?? "?",
+      contenido: n.contenido_raw as string,
+      fecha: n.fecha as string,
+      vence: (n.vence as string | null) ?? null,
+      vencido: !!n.vence && (n.vence as string) < hoyISO,
+    };
+  });
+
+  // Propuestas de SKU del copiloto sin resolver, para el mes actual, por cliente
+  const propuestasPendientes = new Map<string, number>();
+  for (const r of propRes.error ? [] : (propRes.data ?? [])) {
+    const ev = Array.isArray(r.evidencia) ? (r.evidencia as { tipo: string; propuesta?: { fy: number; periodo: number } }[]) : [];
+    const m = ev.find((e) => e.tipo === "meta_sku" && e.propuesta);
+    if (!m?.propuesta || m.propuesta.fy !== fy || m.propuesta.periodo !== periodo) continue;
+    propuestasPendientes.set(r.cliente_id as string, (propuestasPendientes.get(r.cliente_id as string) ?? 0) + 1);
+  }
+
+  return { ...meta, fy, periodo, cortes, ytd, compromisos, propuestasPendientes };
 }
 
 // ---- Meta del mes actual (o el que se elija) ----

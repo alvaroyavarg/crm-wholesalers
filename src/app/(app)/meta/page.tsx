@@ -16,7 +16,7 @@ function hrefMes(fy: number, periodo: number): string {
 export default async function MetaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; periodo?: string }>;
+  searchParams: Promise<{ fy?: string; periodo?: string; cliente?: string }>;
 }) {
   const sp = await searchParams;
   const fyParam = sp.fy ? Number(sp.fy) : undefined;
@@ -146,6 +146,7 @@ export default async function MetaPage({
             etiquetas={etiquetas}
             periodos={columnas}
             catalogo={catalogo}
+            panelInicial={sp.cliente ?? null}
           />
         </div>
         <p className="px-5 pb-4 pt-2 text-[11px] text-gray-400">

@@ -26,6 +26,7 @@ interface Props {
     d: { fy: number; periodo: number };
   };
   catalogo: SkuCatalogo[];
+  panelInicial?: string | null; // /meta?cliente=<id> abre el panel de ese cliente
 }
 
 // EUS y UC se muestran como texto mientras se escribe y se derivan uno del
@@ -84,7 +85,7 @@ function claveSku(clienteId: string, marca: string, formato: string) {
   return `${clienteId}|${marca}|${formato}`;
 }
 
-export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, periodos, catalogo }: Props) {
+export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, periodos, catalogo, panelInicial = null }: Props) {
   // ---- orden ----
   const [orden, setOrden] = useState<Columna>("eus_a");
   const [asc, setAsc] = useState(false);
@@ -103,7 +104,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
   const [detalle, setDetalle] = useState<Record<string, DetalleMetaItem[] | "cargando">>({});
   const [skuEdits, setSkuEdits] = useState<Record<string, string>>({});
   const [nuevoSku, setNuevoSku] = useState<Record<string, string>>({});
-  const [panelId, setPanelId] = useState<string | null>(null);
+  const [panelId, setPanelId] = useState<string | null>(panelInicial);
   // ---- columnas visibles ----
   const [ocultas, setOcultas] = useState<Set<ColumnaOcultable>>(new Set());
   const [menuColumnas, setMenuColumnas] = useState(false);
