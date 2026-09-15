@@ -488,7 +488,6 @@ export async function guardarMetaSku(input: {
   if (errPlan) throw new Error(`plan_ventas: ${errPlan.message}`);
 
   revalidatePath("/meta");
-  revalidatePath("/mtd");
   revalidatePath("/plan");
   revalidatePath("/");
   return total;

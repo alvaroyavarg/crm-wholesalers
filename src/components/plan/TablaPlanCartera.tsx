@@ -166,7 +166,7 @@ export function TablaPlanCartera({
                     href={`/plan?cliente=${f.cliente_id}`}
                     className="text-sm font-medium text-verde hover:underline"
                   >
-                    Editar plan
+                    Ver año
                   </Link>
                 </td>
               </tr>

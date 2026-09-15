@@ -246,18 +246,7 @@ export interface MtdClienteRow {
   pedidos_eus?: number; // pedidos en curso (comprometido/ingresado) no reflejados aún en la venta
 }
 
-export interface MtdCategoriaRow {
-  categoria: string;
-  eus: number;
-  eus_ly: number;
-}
 
-export interface MtdBottlerRow {
-  bottler: string;
-  eus: number;
-  eus_ly: number;
-  clientes: number;
-}
 
 // ---- Dashboard del mes ----
 export interface CompromisoPendiente {

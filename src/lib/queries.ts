@@ -16,8 +16,6 @@ import type {
   MetaClienteRow,
   MixCategoriaRow,
   MixSkuRow,
-  MtdBottlerRow,
-  MtdCategoriaRow,
   MtdClienteRow,
   Nota,
   Perfil,
@@ -258,60 +256,6 @@ export async function planMatriz() {
 
 // Todo lo del mes en una sola pasada: cartera, desgloses y fecha de corte.
 // La fecha de corte viene de la tabla `importaciones` y es la que manda para
-// calcular el ritmo — no la fecha de hoy.
-export async function mtdCompleto() {
-  const supabase = await createClient();
-  const { fy, periodo } = fiscalActual();
-  const params = { p_fy: fy, p_periodo: periodo };
-
-  const [cartera, categorias, bottlers, corte, cargas, pedidos] = await Promise.all([
-    supabase.rpc("mtd_cartera", params),
-    supabase.rpc("mtd_categorias", params),
-    supabase.rpc("mtd_bottlers", params),
-    supabase.rpc("fecha_corte_periodo", params),
-    supabase
-      .from("importaciones")
-      .select("*")
-      .eq("anio_fiscal", fy)
-      .eq("periodo", periodo)
-      .order("creado_at", { ascending: false }),
-    // Pedidos registrados a mano y aún no facturados: avance "en curso" que
-    // la venta del bottler todavía no refleja. Si la tabla no existe
-    // (migración 0019 pendiente) se ignora.
-    supabase
-      .from("pedidos")
-      .select("cliente_id, eus")
-      .eq("anio_fiscal", fy)
-      .eq("periodo", periodo)
-      .neq("estado", "facturado"),
-  ]);
-
-  if (cartera.error) throw new Error(`mtd_cartera: ${cartera.error.message}`);
-  if (categorias.error) throw new Error(`mtd_categorias: ${categorias.error.message}`);
-  if (bottlers.error) throw new Error(`mtd_bottlers: ${bottlers.error.message}`);
-  if (corte.error) throw new Error(`fecha_corte_periodo: ${corte.error.message}`);
-  if (cargas.error) throw new Error(`importaciones: ${cargas.error.message}`);
-
-  const pedidosPorCliente = new Map<string, number>();
-  for (const p of pedidos.error ? [] : (pedidos.data ?? [])) {
-    pedidosPorCliente.set(p.cliente_id as string, (pedidosPorCliente.get(p.cliente_id as string) ?? 0) + Number(p.eus));
-  }
-  const clientes = ((cartera.data ?? []) as MtdClienteRow[]).map((c) => ({
-    ...c,
-    pedidos_eus: pedidosPorCliente.get(c.cliente_id) ?? 0,
-  }));
-
-  return {
-    fy,
-    periodo,
-    fechaCorte: (corte.data as string | null) ?? null,
-    clientes,
-    categorias: (categorias.data ?? []) as MtdCategoriaRow[],
-    bottlers: (bottlers.data ?? []) as MtdBottlerRow[],
-    cargas: (cargas.data ?? []) as Importacion[],
-  };
-}
-
 // ---- Dashboard: portada del mes actual sobre las mismas fuentes que /meta ----
 export async function dashboardMes() {
   const supabase = await createClient();

@@ -48,7 +48,6 @@ export async function importarVentasAction(
     revalidatePath("/");
     revalidatePath("/plan");
     revalidatePath("/meta");
-    revalidatePath("/mtd");
     revalidatePath("/", "layout");
 
     return {
@@ -135,7 +134,6 @@ export async function importarBottlerAction(
     });
 
     revalidatePath("/");
-    revalidatePath("/mtd");
     revalidatePath("/meta");
     revalidatePath("/plan");
     revalidatePath("/", "layout");

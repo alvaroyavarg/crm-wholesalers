@@ -427,7 +427,6 @@ export async function crearPedido(input: {
     .select("*")
     .single();
   if (error) throw new Error(`crearPedido: ${error.message}`);
-  revalidatePath("/mtd");
   revalidatePath("/meta");
   return data as Pedido;
 }
@@ -439,12 +438,10 @@ export async function cambiarEstadoPedido(id: string, estado: EstadoPedido) {
     .update({ estado, actualizado_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw new Error(`cambiarEstadoPedido: ${error.message}`);
-  revalidatePath("/mtd");
 }
 
 export async function eliminarPedido(id: string) {
   const supabase = await requerirSesion();
   const { error } = await supabase.from("pedidos").delete().eq("id", id);
   if (error) throw new Error(`eliminarPedido: ${error.message}`);
-  revalidatePath("/mtd");
 }

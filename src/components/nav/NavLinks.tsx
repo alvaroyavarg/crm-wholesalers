@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 
 const enlaces = [
   { href: "/", etiqueta: "Dashboard", icono: "📊" },
-  { href: "/mtd", etiqueta: "Mes en curso", icono: "📅" },
   { href: "/meta", etiqueta: "Meta mes actual", icono: "🧮" },
   { href: "/plan", etiqueta: "Plan de venta", icono: "🎯" },
   { href: "/copiloto", etiqueta: "Copiloto", icono: "✨" },

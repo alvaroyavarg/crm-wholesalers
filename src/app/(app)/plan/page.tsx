@@ -92,7 +92,7 @@ export default async function PlanPage({
           Plan de venta {etiquetaFY(fy)}
         </h1>
         <p className="text-sm text-gray-500">
-          Meta base: empatar {etiquetaFY(fy - 1)} mes a mes · Vamos en{" "}
+          Vista anual de solo lectura · las metas se asignan por SKU en Meta · Vamos en{" "}
           {etiquetaPeriodo(periodo)}
         </p>
       </header>
