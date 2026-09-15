@@ -604,7 +604,10 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                             {et}{indicador(ordenDet === col, ascDet)}
                           </td>
                         ))}
-                        {ver("ped_comprometido") && <td />}{ver("ped_ingresado") && <td />}{ver("facturado") && <td />}{ver("brecha") && <td />}
+                        {ver("ped_comprometido") && <td className="px-3 py-1.5 text-right font-medium">Comprometido</td>}
+                        {ver("ped_ingresado") && <td className="px-3 py-1.5 text-right font-medium">Ingresado</td>}
+                        {ver("facturado") && <td className="px-3 py-1.5 text-right font-medium">Facturado</td>}
+                        {ver("brecha") && <td className="px-3 py-1.5 text-right font-medium" title={etiquetaBrecha}>Brecha</td>}
                         {ver("meta_uc") && <td className="px-3 py-1.5 text-right font-medium">{unidad === "UC" ? "Meta SKU (EU)" : "UC"}</td>}
                       </tr>
                       {[...items]
