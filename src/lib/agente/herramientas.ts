@@ -34,7 +34,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_historia_sku_meta",
     description:
-      "Para PLANIFICAR LA META DE UN MES: compra del cliente por SKU en los 3 meses anteriores al mes objetivo y el mismo mes del año anterior (LY), MÁS la historia completa del año fiscal anterior y del actual por SKU (total, meses con compra, mayor mes, cadencia de compra, última compra), señales (dejó de comprar, cae vs LY, compra en ciclos, nuevo), la meta total actual del mes, su desglose por SKU si existe y los pedidos ya registrados. Los nombres de marca y formato son EXACTOS: úsalos tal cual al proponer SKU. Si no se indica fy/periodo, usa el mes fiscal actual.",
+      "Para PLANIFICAR LA META DE UN MES: compra del cliente por SKU en los 3 meses anteriores al mes objetivo y el mismo mes del año anterior (LY), MÁS la historia completa del año fiscal anterior y del actual por SKU (total, meses con compra, mayor mes, cadencia de compra, última compra), señales (dejó de comprar, cae vs LY, compra en ciclos, nuevo), la meta total actual del mes, su desglose por SKU, y el AVANCE del mes objetivo: si el bottler ya cargó el mes, venta real por SKU y total; pedidos comprometidos/ingresados/facturados; brecha por SKU y total (meta − facturado, donde facturado = venta real si el bottler cargó). Los nombres de marca y formato son EXACTOS: úsalos tal cual al proponer SKU. Si no se indica fy/periodo, usa el mes fiscal actual.",
     input_schema: {
       type: "object",
       properties: {
@@ -333,7 +333,7 @@ export async function getHistoriaSkuMeta(
   const desde = inicioPeriodo(fyLy, 1);
   const desdeISO = `${desde.getFullYear()}-${String(desde.getMonth() + 1).padStart(2, "0")}-01`;
 
-  const [cliRes, detRes, planRes, pedRes, ventasRes] = await Promise.all([
+  const [cliRes, detRes, planRes, pedRes, ventasRes, cargasRes] = await Promise.all([
     supabase.from("clientes").select("nombre, nombre_corto, bottler, zona, desarrollador, es_otros").eq("id", clienteId).single(),
     supabase.rpc("detalle_meta_cliente", {
       p_cliente: clienteId,
@@ -346,16 +346,24 @@ export async function getHistoriaSkuMeta(
     supabase.from("plan_ventas").select("eus_plan").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta).maybeSingle(),
     supabase.from("pedidos").select("fecha, marca, formato, eus, estado, precio_botella, comentario").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
     supabase.from("ventas").select("periodo, marca, formato, eus").eq("cliente_id", clienteId).gte("periodo", desdeISO),
+    supabase.from("importaciones").select("origen, fecha_corte").eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
   ]);
   if (detRes.error) return { error: detRes.error.message };
 
   // ---- Historia larga por SKU: FY anterior completo + FY actual a la fecha ----
   interface Compra { fy: number; periodo: number; eus: number }
   const porSku = new Map<string, Compra[]>();
+  const ventaRealSku = new Map<string, number>();
   for (const v of (ventasRes.data ?? []) as { periodo: string; marca: string; formato: string | null; eus: number }[]) {
     const [y, m] = v.periodo.split("-").map(Number);
     const { fy, periodo } = aFiscal(new Date(y, m - 1, 1));
-    if (fy > fyMeta || (fy === fyMeta && periodo >= periodoMeta)) continue; // solo pasado
+    if (fy === fyMeta && periodo === periodoMeta) {
+      // venta real del mes objetivo (lo que el bottler ya cargó)
+      const k = `${v.marca}|${v.formato ?? ""}`;
+      ventaRealSku.set(k, (ventaRealSku.get(k) ?? 0) + Number(v.eus));
+      continue;
+    }
+    if (fy > fyMeta || (fy === fyMeta && periodo > periodoMeta)) continue; // solo pasado
     const k = `${v.marca}|${v.formato ?? ""}`;
     const arr = porSku.get(k) ?? [];
     const prev = arr.find((c) => c.fy === fy && c.periodo === periodo);
@@ -364,6 +372,14 @@ export async function getHistoriaSkuMeta(
     porSku.set(k, arr);
   }
   const idx = (c: { fy: number; periodo: number }) => c.fy * 12 + c.periodo;
+  // Regla de la app: si el bottler del cliente ya cargó el mes objetivo, la
+  // venta real es la única verdad (facturado = venta real); si no, cuentan
+  // los pedidos marcados facturados.
+  const cargas = cargasRes.error ? [] : ((cargasRes.data ?? []) as { origen: string; fecha_corte: string }[]);
+  const bottlerCli = cliRes.data?.bottler ?? null;
+  const cargaBottler = cargas.filter((c) => !bottlerCli || c.origen === bottlerCli).map((c) => c.fecha_corte).sort().at(-1) ?? null;
+  const ventaCargada = cargaBottler != null;
+  const ventaRealTotal = [...ventaRealSku.values()].reduce((a, b) => a + b, 0);
   const idxMeta = fyMeta * 12 + periodoMeta;
   function historiaLarga(marca: string, formato: string) {
     const compras = (porSku.get(`${marca}|${formato}`) ?? []).filter((c) => c.eus > 0).sort((x, y) => idx(x) - idx(y));
@@ -395,6 +411,7 @@ export async function getHistoriaSkuMeta(
     };
   }
 
+  const pedidos = (pedRes.data ?? []) as { fecha: string; marca: string; formato: string; eus: number; estado: string; precio_botella: number | null; comentario: string | null }[];
   interface Item { categoria: string; marca: string; formato: string; eus_a: number; eus_b: number; eus_c: number; eus_d: number; meta_eus: number }
   const items = ((detRes.data ?? []) as Item[]).map((it) => {
     const ea = Number(it.eus_a), eb = Number(it.eus_b), ec = Number(it.eus_c), ed = Number(it.eus_d);
@@ -419,6 +436,13 @@ export async function getHistoriaSkuMeta(
       meta_sku_eus: r0(Number(it.meta_eus)),
       senales,
       historia: larga,
+      mes_objetivo: {
+        venta_real_eus: r0(ventaRealSku.get(`${it.marca}|${it.formato}`) ?? 0),
+        pedidos_eus: r0(pedidos.filter((p) => p.marca === it.marca && (p.formato ?? "") === it.formato).reduce((s, p) => s + Number(p.eus), 0)),
+        brecha_eus: r0(Number(it.meta_eus) - (ventaCargada
+          ? (ventaRealSku.get(`${it.marca}|${it.formato}`) ?? 0)
+          : pedidos.filter((p) => p.marca === it.marca && (p.formato ?? "") === it.formato && p.estado === "facturado").reduce((s, p) => s + Number(p.eus), 0))),
+      },
     };
   });
 
@@ -427,7 +451,8 @@ export async function getHistoriaSkuMeta(
   const mesesLyConCompra = new Set([...porSku.values()].flat().filter((c) => c.fy === fyLy && c.eus > 0).map((c) => c.periodo)).size;
 
   const metaSku = items.reduce((s, it) => s + Number(it.meta_sku_eus), 0);
-  const pedidos = (pedRes.data ?? []) as { fecha: string; marca: string; formato: string; eus: number; estado: string; precio_botella: number | null; comentario: string | null }[];
+  const pedTot = (estado: string) => r0(pedidos.filter((p) => p.estado === estado).reduce((s, p) => s + Number(p.eus), 0));
+  const facturadoEfectivo = ventaCargada ? ventaRealTotal : pedidos.filter((p) => p.estado === "facturado").reduce((s, p) => s + Number(p.eus), 0);
 
   return {
     cliente: cliRes.data?.nombre_corto ?? cliRes.data?.nombre,
@@ -441,6 +466,18 @@ export async function getHistoriaSkuMeta(
     fy_anterior_promedio_mensual: mesesLyConCompra ? r0(totalLy / mesesLyConCompra) : 0,
     meta_total_eus: r0(Number(planRes.data?.eus_plan ?? 0)),
     meta_desglosada_sku_eus: r0(metaSku),
+    avance_mes_objetivo: {
+      bottler_cargo_el_mes: ventaCargada,
+      fecha_corte_bottler: cargaBottler,
+      venta_real_eus: r0(ventaRealTotal),
+      comprometido_eus: pedTot("comprometido"),
+      ingresado_eus: pedTot("ingresado"),
+      facturado_eus: r0(facturadoEfectivo),
+      brecha_eus: r0(Number(planRes.data?.eus_plan ?? 0) - facturadoEfectivo),
+      regla: ventaCargada
+        ? "El bottler ya cargó el mes: la venta real es la única verdad; un pedido facturado que no aparece en la venta vale 0."
+        : "El bottler aún no carga el mes: facturado = pedidos marcados facturados; el avance es provisorio.",
+    },
     total_3m_promedio: r0(items.reduce((s, it) => s + Number(it.promedio_3m), 0)),
     total_ly: r0(items.reduce((s, it) => s + Number(it[`${etiquetaMesCalendario(d.fy, d.periodo)} (LY)`]), 0)),
     skus: items,
