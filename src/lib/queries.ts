@@ -142,7 +142,7 @@ export async function fichaCliente(id: string, fyDetalleParam?: number) {
     detalle: detalleRes.error ? null : ((detalleRes.data ?? []) as ItemDetalle[]),
     // null si la migración 0006 está pendiente
     mixSkus: mixSkusRes.error ? null : ((mixSkusRes.data ?? []) as MixSkuRow[]),
-    recomendaciones: (recomendacionesRes.data ?? []) as Recomendacion[],
+    recomendaciones: ((recomendacionesRes.data ?? []) as Recomendacion[]).filter((r) => !esPropuestaSku(r.evidencia)),
   };
 }
 
@@ -368,12 +368,18 @@ export async function dashboardMes() {
   });
 
   // Propuestas de SKU del copiloto sin resolver, para el mes actual, por cliente
+  // Solo cuenta el último lote de cada cliente (lo mismo que muestra el panel).
   const propuestasPendientes = new Map<string, number>();
+  const loteActual = new Map<string, string>();
   for (const r of propRes.error ? [] : (propRes.data ?? [])) {
-    const ev = Array.isArray(r.evidencia) ? (r.evidencia as { tipo: string; propuesta?: { fy: number; periodo: number } }[]) : [];
+    const ev = Array.isArray(r.evidencia) ? (r.evidencia as { tipo: string; propuesta?: { fy: number; periodo: number; lote?: string } }[]) : [];
     const m = ev.find((e) => e.tipo === "meta_sku" && e.propuesta);
     if (!m?.propuesta || m.propuesta.fy !== fy || m.propuesta.periodo !== periodo) continue;
-    propuestasPendientes.set(r.cliente_id as string, (propuestasPendientes.get(r.cliente_id as string) ?? 0) + 1);
+    const cid = r.cliente_id as string;
+    const lote = m.propuesta.lote ?? "";
+    if (!loteActual.has(cid)) loteActual.set(cid, lote); // filas ordenadas por creada_at desc
+    if (loteActual.get(cid) !== lote) continue;
+    propuestasPendientes.set(cid, (propuestasPendientes.get(cid) ?? 0) + 1);
   }
 
   return { ...meta, fy, periodo, cortes, ytd, compromisos, propuestasPendientes };
@@ -420,7 +426,7 @@ export async function metaProximoMes(fyParam?: number, periodoParam?: number) {
   const [pedRes, mtdRes, cargasRes] = await Promise.all([
     supabase.from("pedidos").select("cliente_id, estado, eus").eq("anio_fiscal", meta.fy).eq("periodo", meta.periodo),
     supabase.rpc("mtd_cartera", { p_fy: meta.fy, p_periodo: meta.periodo }),
-    supabase.from("importaciones").select("origen").eq("anio_fiscal", meta.fy).eq("periodo", meta.periodo),
+    supabase.from("importaciones").select("origen").eq("anio_fiscal", meta.fy).eq("periodo", meta.periodo).in("origen", ["KOA", "KOE"]),
   ]);
   const ped = new Map<string, { comprometido: number; ingresado: number; facturado: number }>();
   for (const p of pedRes.error ? [] : (pedRes.data ?? [])) {

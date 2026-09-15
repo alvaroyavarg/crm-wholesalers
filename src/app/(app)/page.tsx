@@ -37,7 +37,13 @@ export default async function Dashboard() {
   const corte = cargados.length ? cargados.map((c) => c.fecha_corte as string).sort()[0] : null;
   const ritmo = corte ? ritmoMes(inicioPeriodo(fy, periodo), corte, tot.facturado, tot.meta) : null;
 
-  const ytdTot = [...ytd.values()].reduce((a, v) => ({ ytd: a.ytd + v.ytd, ly: a.ly + v.ytdLy }), { ytd: 0, ly: 0 });
+  const ytdTot = clientes.reduce(
+    (a, c) => {
+      const v = ytd.get(c.cliente_id);
+      return v ? { ytd: a.ytd + v.ytd, ly: a.ly + v.ytdLy } : a;
+    },
+    { ytd: 0, ly: 0 },
+  );
   const hayYtd = ytd.size > 0;
   const vsLy = ytdTot.ly > 0 ? ((ytdTot.ytd - ytdTot.ly) / ytdTot.ly) * 100 : null;
 
@@ -65,7 +71,7 @@ export default async function Dashboard() {
       ytdLy: y?.ytdLy ?? null,
       compromisos: compPorCliente.get(c.cliente_id) ?? 0,
       propuestas: propuestasPendientes.get(c.cliente_id) ?? 0,
-      alRitmo: meta > 0 && ritmo ? (fac / meta) * 100 >= ritmo.pctTranscurrido : null,
+      alRitmo: meta > 0 && ritmo && c.venta_cargada ? (fac / meta) * 100 >= ritmo.pctTranscurrido : null,
     };
   });
 
