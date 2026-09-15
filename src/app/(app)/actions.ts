@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { inicioPeriodo } from "@/lib/fiscal";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -421,7 +422,43 @@ export async function obtenerDetalleMeta(
     p_periodo_meta: periodoMeta,
   });
   if (error) throw new Error(`detalle_meta_cliente: ${error.message}`);
-  return (data ?? []) as DetalleMetaItem[];
+  const items = (data ?? []) as DetalleMetaItem[];
+
+  // Avance del mes objetivo por SKU: pedidos por estado y venta real cargada.
+  const d0 = inicioPeriodo(fyMeta, periodoMeta);
+  const d1 = new Date(d0.getFullYear(), d0.getMonth() + 1, 1);
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  const [pedRes, venRes] = await Promise.all([
+    supabase.from("pedidos").select("marca, formato, estado, eus").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
+    supabase.from("ventas").select("marca, formato, eus").eq("cliente_id", clienteId).gte("periodo", iso(d0)).lt("periodo", iso(d1)),
+  ]);
+  const clave = (m: string, f: string | null) => `${m}|${f ?? ""}`;
+  const porSku = new Map<string, { ped_comprometido: number; ped_ingresado: number; ped_facturado: number; venta_real: number }>();
+  const get = (k: string) => {
+    let v = porSku.get(k);
+    if (!v) { v = { ped_comprometido: 0, ped_ingresado: 0, ped_facturado: 0, venta_real: 0 }; porSku.set(k, v); }
+    return v;
+  };
+  for (const p of pedRes.error ? [] : (pedRes.data ?? [])) {
+    const v = get(clave(p.marca as string, p.formato as string));
+    const est = p.estado as "comprometido" | "ingresado" | "facturado";
+    if (est === "comprometido") v.ped_comprometido += Number(p.eus);
+    else if (est === "ingresado") v.ped_ingresado += Number(p.eus);
+    else v.ped_facturado += Number(p.eus);
+  }
+  for (const r of venRes.error ? [] : (venRes.data ?? [])) {
+    get(clave(r.marca as string, r.formato as string | null)).venta_real += Number(r.eus);
+  }
+
+  const conAvance: DetalleMetaItem[] = items.map((it) => ({ ...it, ...(porSku.get(clave(it.marca, it.formato)) ?? {}) }));
+  // SKU con pedido o venta este mes pero sin historia ni meta: mostrarlos igual
+  const presentes = new Set(items.map((it) => clave(it.marca, it.formato)));
+  for (const [k, v] of porSku) {
+    if (presentes.has(k)) continue;
+    const [marca, formato] = k.split("|");
+    conAvance.push({ categoria: "", marca, formato, eus_a: 0, eus_b: 0, eus_c: 0, eus_d: 0, meta_eus: 0, ...v });
+  }
+  return conAvance;
 }
 
 // ---- Meta por SKU ----

@@ -636,7 +636,27 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                                 />
                                 {guardando[k] && <span className="ml-1 text-[10px] text-gray-400">…</span>}
                               </td>}
-                              {ver("ped_comprometido") && <td />}{ver("ped_ingresado") && <td />}{ver("facturado") && <td />}{ver("brecha") && <td />}
+                              {(() => {
+                                const pc = Number(it.ped_comprometido ?? 0), pi = Number(it.ped_ingresado ?? 0);
+                                const fac = f.venta_cargada ? Number(it.venta_real ?? 0) : Number(it.ped_facturado ?? 0);
+                                let br = nEus;
+                                if (descuentos.has("facturado")) br -= fac;
+                                if (descuentos.has("ped_ingresado")) br -= pi;
+                                if (descuentos.has("ped_comprometido")) br -= pc;
+                                const c = "px-3 py-1.5 text-right text-xs";
+                                return (
+                                  <>
+                                    {ver("ped_comprometido") && <td className={`${c} text-gray-500`}>{pc > 0 ? fmt(pc) : "—"}</td>}
+                                    {ver("ped_ingresado") && <td className={`${c} text-gray-500`}>{pi > 0 ? fmt(pi) : "—"}</td>}
+                                    {ver("facturado") && (
+                                      <td className={`${c} text-gray-600`} title={f.venta_cargada ? "Venta real del bottler para este SKU" : "Pedidos facturados de este SKU"}>
+                                        {fac > 0 ? fmt(fac) : "—"}{f.venta_cargada && fac > 0 ? <span className="ml-1 text-[9px] text-verde">●</span> : null}
+                                      </td>
+                                    )}
+                                    {ver("brecha") && <td className={`${c} font-medium ${nEus <= 0 ? "text-gray-300" : br <= 0 ? "text-verde" : "text-ambar"}`}>{nEus > 0 ? fmt(br) : "—"}</td>}
+                                  </>
+                                );
+                              })()}
                               {ver("meta_uc") && (
                                 <td className="px-3 py-1.5 text-right text-gray-400">
                                   {Number.isFinite(nEus) && nEus > 0 ? (unidad === "UC" ? formatoUnidad(nEus, "EU") : eusAUc(nEus)) : "—"}
@@ -706,7 +726,10 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
           metaActual={Number(valorEdicion(filaPanel).eus) || 0}
           onClose={() => setPanelId(null)}
           onMetaSku={aplicarMetaSku}
-          onPedidos={(clienteId, sumas) => setPedidosLocal((p) => ({ ...p, [clienteId]: sumas }))}
+          onPedidos={(clienteId, sumas) => {
+            setPedidosLocal((p) => ({ ...p, [clienteId]: sumas }));
+            if (detalle[clienteId] !== undefined) cargarDetalle(clienteId); // el desglose por SKU también cambia
+          }}
         />
       )}
     </div>

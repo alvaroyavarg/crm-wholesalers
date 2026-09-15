@@ -297,6 +297,11 @@ export interface DetalleMetaItem {
   eus_c: number;
   eus_d: number;
   meta_eus: number; // meta por SKU para el período meta (0 si no hay)
+  // Avance del mes objetivo por SKU (lo agrega la app, no el RPC)
+  ped_comprometido?: number;
+  ped_ingresado?: number;
+  ped_facturado?: number;
+  venta_real?: number; // venta cargada del bottler para ese SKU en el mes objetivo
 }
 
 export interface SkuCatalogo {
