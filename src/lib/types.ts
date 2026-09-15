@@ -259,7 +259,7 @@ export interface MtdBottlerRow {
   clientes: number;
 }
 
-// ---- Meta del próximo mes ----
+// ---- Meta del mes actual (o el que se elija) ----
 
 // Fila del RPC resumen_meta_periodo
 export interface MetaClienteRow {

@@ -155,7 +155,7 @@ export function TablaMtd({
                 <td className="px-3 py-3 text-right">
                   <Link
                     href={`/meta?fy=${fy}&periodo=${periodo}`}
-                    title="La meta es la suma de las metas por SKU: se asigna en Meta próx. mes"
+                    title="La meta es la suma de las metas por SKU: se asigna en Meta mes actual"
                     className="rounded px-1 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                   >
                     {meta > 0 ? formatEUs(meta) : "—"}

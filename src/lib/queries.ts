@@ -303,7 +303,7 @@ export async function mtdCompleto() {
   };
 }
 
-// ---- Meta del próximo mes ----
+// ---- Meta del mes actual (o el que se elija) ----
 
 // Tabla de trabajo para fijar la meta de un mes: por defecto el que sigue al
 // actual (hoy Sept-26), con 3 columnas de tendencia reciente (los 3 meses
