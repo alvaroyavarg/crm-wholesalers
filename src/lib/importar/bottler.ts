@@ -378,6 +378,9 @@ export async function importarBottler(
 
     // Log de la importación (fecha_corte alimenta el ritmo del MTD)
     const { fy, periodo } = aFiscal(new Date(m.anio, m.mes - 1, 1));
+    // Solo la última carga cuenta: una carga parcial anterior no debe seguir
+    // fijando la fecha de corte (fecha_corte_periodo usa el mínimo).
+    await supabase.from("importaciones").delete().eq("origen", origen).eq("anio_fiscal", fy).eq("periodo", periodo);
     const { error: errLog } = await supabase.from("importaciones").insert({
       origen,
       anio_fiscal: fy,

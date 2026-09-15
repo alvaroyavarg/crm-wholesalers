@@ -122,7 +122,7 @@ export function parsearBase(buffer: Buffer | ArrayBuffer): FilaBase[] {
 export async function importarBase(
   supabase: SupabaseClient,
   filas: FilaBase[],
-  opciones: { regenerarPlan?: boolean; fyPlan?: number } = {},
+  opciones: { regenerarPlan?: boolean; fyPlan?: number; pisarBottler?: boolean } = {},
 ): Promise<ResultadoImport> {
   if (filas.length === 0) throw new Error("El archivo no tiene filas de datos.");
 
@@ -246,6 +246,28 @@ export async function importarBase(
 
   // ---- 3. Reemplazar los períodos presentes en el archivo ----
   const periodos = [...periodosSet].sort();
+
+  // Seguro: un mes ya cargado desde Andina/Embonor tiene venta por SKU con
+  // valor y fila "Otros"; la base consolidada lo pisaría con menos detalle.
+  const { data: cargasBottler } = await supabase
+    .from("importaciones")
+    .select("origen, anio_fiscal, periodo")
+    .in("origen", ["KOA", "KOE"]);
+  const mesesBottler = new Set(
+    (cargasBottler ?? []).map((c) => {
+      const anio = Number(c.periodo) <= 6 ? Number(c.anio_fiscal) - 1 : Number(c.anio_fiscal);
+      const mes = ((Number(c.periodo) + 5) % 12) + 1;
+      return `${anio}-${String(mes).padStart(2, "0")}-01`;
+    }),
+  );
+  const enConflicto = periodos.filter((p) => mesesBottler.has(p));
+  if (enConflicto.length > 0 && !opciones.pisarBottler) {
+    throw new Error(
+      `Estos meses ya están cargados desde los bottlers y la base los pisaría: ${enConflicto.join(", ")}. ` +
+        `Quita esos meses del archivo o marca "pisar meses cargados desde bottlers".`,
+    );
+  }
+
   for (let i = 0; i < periodos.length; i += 30) {
     const lote = periodos.slice(i, i + 30);
     const { error: errDel } = await supabase.from("ventas").delete().in("periodo", lote);
@@ -277,7 +299,8 @@ export async function importarBase(
     const { data: activos, error: errAct } = await supabase
       .from("clientes")
       .select("id")
-      .eq("activo", true);
+      .eq("activo", true)
+      .eq("es_otros", false);
     if (errAct) throw new Error(`clientes activos: ${errAct.message}`);
 
     const lyPorClientePeriodo = new Map<string, number>();
@@ -290,19 +313,31 @@ export async function importarBase(
       lyPorClientePeriodo.set(clave, (lyPorClientePeriodo.get(clave) ?? 0) + a.eus);
     }
 
+    // Regla: la meta es la suma de metas por SKU. "Empatar LY" escribe la
+    // línea "Sin desglose" solo en los meses que aún no tienen ningún SKU
+    // asignado (los ya trabajados no se tocan); el trigger recalcula el total.
+    const { data: conSku } = await supabase
+      .from("plan_ventas_sku")
+      .select("cliente_id, periodo")
+      .eq("anio_fiscal", fyPlan);
+    const yaTrabajado = new Set((conSku ?? []).map((r) => `${r.cliente_id}|${r.periodo}`));
     const planRows = (activos ?? []).flatMap((c) =>
       Array.from({ length: 12 }, (_, i) => ({
         cliente_id: c.id as string,
         anio_fiscal: fyPlan,
         periodo: i + 1,
+        marca: "Sin desglose",
+        formato: "",
         eus_plan: Math.round(lyPorClientePeriodo.get(`${c.id}|${i + 1}`) ?? 0),
         actualizado_at: new Date().toISOString(),
-      })),
+      })).filter((r) => r.eus_plan > 0 && !yaTrabajado.has(`${r.cliente_id}|${r.periodo}`)),
     );
-    const { error: errPlan } = await supabase
-      .from("plan_ventas")
-      .upsert(planRows, { onConflict: "cliente_id,anio_fiscal,periodo" });
-    if (errPlan) throw new Error(`plan: ${errPlan.message}`);
+    if (planRows.length > 0) {
+      const { error: errPlan } = await supabase
+        .from("plan_ventas_sku")
+        .upsert(planRows, { onConflict: "cliente_id,anio_fiscal,periodo,marca,formato" });
+      if (errPlan) throw new Error(`plan: ${errPlan.message}`);
+    }
   }
 
   return {

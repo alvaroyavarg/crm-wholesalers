@@ -33,6 +33,7 @@ export async function importarVentasAction(
     return { ok: false, mensaje: "Selecciona el archivo Excel de la base." };
   }
   const regenerarPlan = formData.get("regenerar_plan") === "on";
+  const pisarBottler = formData.get("pisar_bottler") === "on";
 
   try {
     const filas = parsearBase(await archivo.arrayBuffer());
@@ -41,10 +42,13 @@ export async function importarVentasAction(
     const r = await importarBase(admin, filas, {
       regenerarPlan,
       fyPlan: fy,
+      pisarBottler,
     });
 
     revalidatePath("/");
     revalidatePath("/plan");
+    revalidatePath("/meta");
+    revalidatePath("/mtd");
     revalidatePath("/", "layout");
 
     return {
@@ -56,7 +60,7 @@ export async function importarVentasAction(
         Object.entries(r.porFY)
           .map(([k, v]) => `${k}: ${Math.round(v).toLocaleString("es-CL")} EUs`)
           .join(" · ") +
-        (regenerarPlan ? " · Plan regenerado desde LY." : ""),
+        (regenerarPlan ? " · Meta 'Sin desglose' = LY en los meses aún no trabajados." : ""),
     };
   } catch (e) {
     return {

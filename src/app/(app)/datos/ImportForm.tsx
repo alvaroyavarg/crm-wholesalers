@@ -29,8 +29,17 @@ export function ImportForm() {
       <label className="flex items-start gap-2 text-sm text-gray-600">
         <input type="checkbox" name="regenerar_plan" className="mt-0.5 accent-verde" />
         <span>
-          Regenerar el plan del FY actual con el real del FY anterior (empatar
-          LY). Úsalo solo si quieres pisar el plan que ya editaste.
+          Proponer meta = real del FY anterior (empatar LY) como línea “Sin desglose”,
+          solo en los meses que aún no tienen SKU asignados. La meta sigue siendo la
+          suma de SKU.
+        </span>
+      </label>
+
+      <label className="flex items-start gap-2 text-sm text-gray-600">
+        <input type="checkbox" name="pisar_bottler" className="mt-0.5 accent-verde" />
+        <span>
+          Pisar meses ya cargados desde Andina/Embonor. Por defecto se bloquea: la base
+          consolidada tiene menos detalle que el archivo del bottler.
         </span>
       </label>
 

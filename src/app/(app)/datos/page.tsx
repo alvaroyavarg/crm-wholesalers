@@ -50,8 +50,8 @@ export default async function DatosPage() {
           <p className="mb-4 text-xs text-gray-500">
             Los archivos que exporta Andina (KOA) y Embonor (KOE) directamente, sin pasar por la
             base consolidada de Diageo. Cada archivo trae toda la venta del canal — acá se filtra
-            solo a la cartera de 23 cuentas y se convierte de UC a EUs (5,678/9, ÷10 extra para
-            Smirnoff Ice).
+            a la cartera gestionada (40 cuentas), el resto se agrupa en “Otros Andina” / “Otros
+            Embonor”, y se convierte de UC a EUs (5,678/9, ÷10 extra para Smirnoff Ice).
           </p>
           <div className="max-w-md">
             <ImportBottlerForm />
