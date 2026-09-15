@@ -13,6 +13,7 @@ import * as XLSX from "xlsx";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { categoriaDe } from "./categorias";
 import { CARTERA, FUSIONES } from "./cartera";
+import { aFiscal } from "@/lib/fiscal";
 
 export interface FilaBase {
   cod: string;
@@ -122,7 +123,7 @@ export function parsearBase(buffer: Buffer | ArrayBuffer): FilaBase[] {
 export async function importarBase(
   supabase: SupabaseClient,
   filas: FilaBase[],
-  opciones: { regenerarPlan?: boolean; fyPlan?: number; pisarBottler?: boolean } = {},
+  opciones: { regenerarPlan?: boolean; fyPlan?: number; pisarBottler?: boolean; archivo?: string } = {},
 ): Promise<ResultadoImport> {
   if (filas.length === 0) throw new Error("El archivo no tiene filas de datos.");
 
@@ -291,6 +292,50 @@ export async function importarBase(
     const lote = filasVentas.slice(i, i + 1000);
     const { error: errIns } = await supabase.from("ventas").insert(lote);
     if (errIns) throw new Error(`insert ventas (lote ${i / 1000}): ${errIns.message}`);
+  }
+
+  // ---- 3b. Log de cargas: una fila DIAGEO por mes (mes completo) ----
+  // Si la base pisó un mes que venía de un bottler, esa carga ya no existe en
+  // `ventas`: se borra su log para que /meta no lo trate como venta real con corte.
+  const eusPorPeriodo = new Map<string, { filas: number; eus: number }>();
+  for (const f of filasVentas) {
+    const a = eusPorPeriodo.get(f.periodo) ?? { filas: 0, eus: 0 };
+    a.filas += 1;
+    a.eus += f.eus;
+    eusPorPeriodo.set(f.periodo, a);
+  }
+  const logRows = periodos.map((p) => {
+    const [anio, mes] = p.split("-").map(Number);
+    const { fy, periodo } = aFiscal(new Date(anio, mes - 1, 1));
+    const ultimoDia = new Date(anio, mes, 0).getDate();
+    const agg = eusPorPeriodo.get(p) ?? { filas: 0, eus: 0 };
+    return {
+      origen: "DIAGEO" as const,
+      anio_fiscal: fy,
+      periodo,
+      fecha_corte: `${anio}-${String(mes).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`,
+      filas: agg.filas,
+      eus: Math.round(agg.eus),
+      archivo: opciones.archivo ?? null,
+    };
+  });
+  for (const r of logRows) {
+    const origenes = enConflicto.includes(
+      `${r.anio_fiscal - (r.periodo <= 6 ? 1 : 0)}-${String(((r.periodo + 5) % 12) + 1).padStart(2, "0")}-01`,
+    )
+      ? ["DIAGEO", "KOA", "KOE"]
+      : ["DIAGEO"];
+    const { error: errDelLog } = await supabase
+      .from("importaciones")
+      .delete()
+      .eq("anio_fiscal", r.anio_fiscal)
+      .eq("periodo", r.periodo)
+      .in("origen", origenes);
+    if (errDelLog) throw new Error(`importaciones: ${errDelLog.message}`);
+  }
+  if (logRows.length > 0) {
+    const { error: errLog } = await supabase.from("importaciones").insert(logRows);
+    if (errLog) throw new Error(`importaciones: ${errLog.message}`);
   }
 
   // ---- 4. Plan del FY actual = real del FY anterior (empatar LY) ----

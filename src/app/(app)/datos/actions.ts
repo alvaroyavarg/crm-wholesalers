@@ -43,11 +43,13 @@ export async function importarVentasAction(
       regenerarPlan,
       fyPlan: fy,
       pisarBottler,
+      archivo: archivo.name,
     });
 
     revalidatePath("/");
     revalidatePath("/plan");
     revalidatePath("/meta");
+    revalidatePath("/datos");
     revalidatePath("/", "layout");
 
     return {

@@ -2,13 +2,23 @@ import { Card } from "@/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
 import { ImportForm } from "./ImportForm";
 import { ImportBottlerForm } from "./ImportBottlerForm";
+import { MatrizCargas } from "@/components/datos/MatrizCargas";
+import { fiscalActual } from "@/lib/fiscal";
+import type { Importacion } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function DatosPage() {
+export default async function DatosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ fy?: string }>;
+}) {
   const supabase = await createClient();
+  const sp = await searchParams;
+  const actual = fiscalActual();
+  const fySel = Number(sp.fy) || actual.fy;
 
-  const [ultimoPeriodo, totalClientes, activos] = await Promise.all([
+  const [ultimoPeriodo, totalClientes, activos, cargasRes, fysRes] = await Promise.all([
     supabase
       .from("ventas")
       .select("periodo")
@@ -20,7 +30,18 @@ export default async function DatosPage() {
       .from("clientes")
       .select("id", { count: "exact", head: true })
       .eq("activo", true),
+    supabase
+      .from("importaciones")
+      .select("*")
+      .eq("anio_fiscal", fySel)
+      .order("creado_at", { ascending: true }),
+    supabase.from("importaciones").select("anio_fiscal"),
   ]);
+
+  const cargas = (cargasRes.data ?? []) as Importacion[];
+  const fys = Array.from(
+    new Set([actual.fy, ...(fysRes.data ?? []).map((r) => Number(r.anio_fiscal))]),
+  ).sort((a, b) => b - a);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -58,7 +79,25 @@ export default async function DatosPage() {
           </div>
         </Card>
 
-        <Card className="h-fit">
+        <Card className="lg:col-span-3">
+          <h2 className="mb-1 font-display text-base font-semibold text-gray-900">
+            Qué hay cargado por mes
+          </h2>
+          <p className="mb-4 text-xs text-gray-500">
+            Cada celda es una carga: la fecha de corte del archivo del bottler manda en Meta
+            (facturado = venta real + pedidos facturados después del corte). La base Diageo
+            trae meses cerrados. Un mes en amarillo está parcial: vuelve a cargarlo cuando
+            tengas el archivo actualizado y el corte se mueve solo.
+          </p>
+          <MatrizCargas
+            fy={fySel}
+            periodoActual={fySel === actual.fy ? actual.periodo : null}
+            cargas={cargas}
+            fys={fys}
+          />
+        </Card>
+
+        <Card className="h-fit lg:col-span-3">
           <h2 className="mb-3 font-display text-base font-semibold text-gray-900">
             Estado de la data
           </h2>
