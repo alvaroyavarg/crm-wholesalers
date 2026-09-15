@@ -217,7 +217,7 @@ export default async function MtdPage() {
           <p className="text-sm font-medium text-gray-700">
             Avance por cuenta
             <span className="ml-2 text-xs font-normal text-gray-400">
-              clic en la meta para editarla
+              la meta se asigna por SKU en Meta mes actual
             </span>
           </p>
           {sinMeta > 0 && (

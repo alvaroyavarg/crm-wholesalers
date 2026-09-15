@@ -156,7 +156,14 @@ export async function recomendacionesCliente(clienteId: string) {
     .eq("estado", "nueva")
     .order("creada_at", { ascending: false });
   if (error) throw new Error(`recomendaciones: ${error.message}`);
-  return (data ?? []) as Recomendacion[];
+  return ((data ?? []) as Recomendacion[]).filter((r) => !esPropuestaSku(r.evidencia));
+}
+
+// Las propuestas de SKU del copiloto (evidencia tipo meta_sku) se aceptan,
+// modifican o rechazan en el panel del cliente de /meta, que es el único
+// camino que escribe la meta; no se muestran en los feeds genéricos.
+function esPropuestaSku(evidencia: unknown): boolean {
+  return Array.isArray(evidencia) && evidencia.some((e) => e && typeof e === "object" && (e as { tipo?: string }).tipo === "meta_sku");
 }
 
 // Feed global de recomendaciones nuevas (para el copiloto), con nombre de cliente.
@@ -169,7 +176,7 @@ export async function recomendacionesFeed() {
     .order("creada_at", { ascending: false })
     .limit(50);
   if (error) throw new Error(`recomendaciones feed: ${error.message}`);
-  return (data ?? []).map((r) => {
+  return (data ?? []).filter((r) => !esPropuestaSku(r.evidencia)).map((r) => {
     const rel = r.clientes as
       | { nombre: string; nombre_corto: string | null }
       | { nombre: string; nombre_corto: string | null }[]

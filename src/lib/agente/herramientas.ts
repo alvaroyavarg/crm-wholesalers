@@ -16,7 +16,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_resumen_cartera",
     description:
-      "Vista panorámica de TODA la cartera activa (~24 cuentas): por cliente, YTD vs LY, mes en curso (MTD) vs mismo mes LY, plan del mes, días de inventario, crédito disponible, señales de oportunidad y última visita. Úsala SIEMPRE que la pregunta sea sobre varias cuentas ('qué clientes…', 'quién tiene espacio…', 'dónde hay oportunidades…') y después profundiza cliente a cliente.",
+      "Vista panorámica de TODA la cartera gestionada (~40 cuentas, sin los agregados Otros): por cliente, bottler, YTD vs LY, mes en curso (MTD) vs mismo mes LY, meta del mes, señal de gap vs LY y última visita. Úsala SIEMPRE que la pregunta sea sobre varias cuentas ('qué clientes…', 'quién tiene espacio…', 'dónde hay oportunidades…') y después profundiza cliente a cliente.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -192,14 +192,15 @@ async function getResumenCartera(supabase: SupabaseClient) {
   });
   if (error) return { error: error.message };
 
-  // bottler por cliente (el RPC no lo trae)
+  // bottler por cliente (el RPC no lo trae) y qué filas son agregados "Otros"
   const { data: bottlers } = await supabase
     .from("clientes")
-    .select("id, bottler")
+    .select("id, bottler, es_otros")
     .eq("activo", true);
   const bottlerDe = new Map(
     (bottlers ?? []).map((b) => [b.id as string, b.bottler as string | null]),
   );
+  const esOtros = new Set((bottlers ?? []).filter((b) => b.es_otros).map((b) => b.id as string));
 
   interface Fila {
     cliente_id: string;
@@ -217,17 +218,11 @@ async function getResumenCartera(supabase: SupabaseClient) {
     ultima_visita: string | null;
   }
 
-  const clientes = ((data ?? []) as Fila[]).map((c) => {
+  const clientes = ((data ?? []) as Fila[]).filter((c) => !esOtros.has(c.cliente_id)).map((c) => {
     const senales: string[] = [];
     const gap = Number(c.ytd_ly_eus) - Number(c.ytd_eus);
     if (Number(c.ytd_ly_eus) > 0 && gap / Number(c.ytd_ly_eus) > 0.05) {
       senales.push(`gap vs LY de ${r0(gap)} EUs`);
-    }
-    if (c.dias_inventario != null && Number(c.dias_inventario) < 30) {
-      senales.push(`inventario bajo (${r0(Number(c.dias_inventario))} días)`);
-    }
-    if (c.credito_disponible != null && Number(c.credito_disponible) > 0) {
-      senales.push(`crédito disponible ($${r0(Number(c.credito_disponible)).toLocaleString("es-CL")})`);
     }
     return {
       cliente_id: c.cliente_id,
@@ -241,8 +236,6 @@ async function getResumenCartera(supabase: SupabaseClient) {
       mismo_mes_ly_eus: r0(Number(c.mes_ly_eus)),
       plan_mes_eus: r0(Number(c.plan_mes_eus)),
       fy_ly_total_eus: r0(Number(c.fy_ly_eus)),
-      dias_inventario: c.dias_inventario != null ? r0(Number(c.dias_inventario)) : null,
-      credito_disponible: c.credito_disponible != null ? r0(Number(c.credito_disponible)) : null,
       ultima_visita: c.ultima_visita?.slice(0, 10) ?? null,
       senales,
     };

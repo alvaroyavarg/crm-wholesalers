@@ -206,8 +206,9 @@ export function ConocimientoEditor({ items }: { items: Conocimiento[] }) {
 
       {items.length === 0 && !creando && (
         <p className="text-sm text-gray-400">
-          Sin entradas todavía. Agrega la estrategia del canal y las políticas
-          comerciales; el copiloto las usará como contexto en la Fase 3.
+          Sin entradas todavía. Lo que escribas aquí entra tal cual en el contexto del
+          copiloto en cada propuesta y en cada chat: foco de marcas del año, política de
+          escalones y precios por bottler, criterios de volumen.
         </p>
       )}
 
