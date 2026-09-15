@@ -441,6 +441,8 @@ export async function obtenerDetalleMeta(
 // Guarda la meta de un SKU y recalcula la meta total del cliente como la
 // suma de sus SKUs (plan_ventas sigue siendo la fuente que leen el
 // dashboard, MTD y Plan). Devuelve la nueva meta total.
+const SIN_DESGLOSE = "Sin desglose";
+
 export async function guardarMetaSku(input: {
   clienteId: string;
   anioFiscal: number;
@@ -451,6 +453,31 @@ export async function guardarMetaSku(input: {
 }) {
   const eus = Number.isFinite(input.eus) && input.eus > 0 ? input.eus : 0;
   const supabase = await createClient();
+  const clave = { cliente_id: input.clienteId, anio_fiscal: input.anioFiscal, periodo: input.periodo };
+
+  // Regla: la meta del cliente viene del Armado y se REPARTE entre SKU.
+  // Asignar o subir un SKU descuenta primero de "Sin desglose" (lo aún no
+  // repartido); solo cuando esa línea llega a 0 la meta total del cliente sube.
+  let sinDesglose: number | null = null;
+  if (input.marca !== SIN_DESGLOSE) {
+    const { data: previas, error: errPrev } = await supabase
+      .from("plan_ventas_sku")
+      .select("marca, formato, eus_plan")
+      .match(clave);
+    if (errPrev) throw new Error(`plan_ventas_sku: ${errPrev.message}`);
+    const anterior = Number((previas ?? []).find((r) => r.marca === input.marca && r.formato === input.formato)?.eus_plan ?? 0);
+    const sd = Number((previas ?? []).find((r) => r.marca === SIN_DESGLOSE)?.eus_plan ?? 0);
+    const delta = eus - anterior;
+    if (delta > 0 && sd > 0) {
+      const nuevo = Math.max(0, Math.round(sd - delta));
+      const q = nuevo > 0
+        ? supabase.from("plan_ventas_sku").update({ eus_plan: nuevo, actualizado_at: new Date().toISOString() }).match({ ...clave, marca: SIN_DESGLOSE, formato: "" })
+        : supabase.from("plan_ventas_sku").delete().match({ ...clave, marca: SIN_DESGLOSE, formato: "" });
+      const { error: errSd } = await q;
+      if (errSd) throw new Error(`plan_ventas_sku (Sin desglose): ${errSd.message}`);
+      sinDesglose = nuevo;
+    }
+  }
 
   if (eus === 0) {
     const { error } = await supabase
@@ -502,5 +529,5 @@ export async function guardarMetaSku(input: {
   revalidatePath("/meta");
   revalidatePath("/plan");
   revalidatePath("/");
-  return total;
+  return { total, sinDesglose };
 }

@@ -167,6 +167,19 @@ async function recomendarSkusMetaInterno(input: { clienteId: string; fyMeta: num
   const nombre = cli?.nombre_corto ?? cli?.nombre ?? "el cliente";
   const mes = etiquetaMesCalendario(fyMeta, periodoMeta);
 
+  // La meta del mes viene del Armado: la propuesta la reparte, no la suma.
+  const { data: lineasMeta } = await supabase
+    .from("plan_ventas_sku")
+    .select("marca, eus_plan")
+    .match({ cliente_id: clienteId, anio_fiscal: fyMeta, periodo: periodoMeta });
+  const metaTotal = Math.round((lineasMeta ?? []).reduce((s, l) => s + Number(l.eus_plan), 0));
+  const sinAsignar = Math.round((lineasMeta ?? []).filter((l) => l.marca === "Sin desglose").reduce((s, l) => s + Number(l.eus_plan), 0));
+  const reglaMeta = metaTotal > 0
+    ? `LA META DEL MES YA ESTÁ FIJADA: ${metaTotal} EUs en total, de los cuales ${sinAsignar} EUs están en "Sin desglose" (aún no repartidos por SKU). ` +
+      `Tu trabajo es REPARTIR esa meta entre SKU, no agrandarla: la suma de tus propuestas debe quedar en torno a ${sinAsignar > 0 ? `los ${sinAsignar} EUs sin asignar (o a la meta total si propones reemplazar las líneas ya asignadas)` : `la meta total de ${metaTotal} EUs`}. ` +
+      `Si por historia crees que la meta debería ser más alta, dilo en el resumen con la cifra sugerida, pero NO lo metas en los volúmenes de las propuestas. `
+    : `Este cliente aún no tiene meta para el mes: propone volúmenes según su historia y dilo en el resumen. `;
+
   const { correrAgente } = await import("@/lib/agente/loop");
   const resultado = await correrAgente(supabase, [
     {
@@ -176,6 +189,7 @@ async function recomendarSkusMetaInterno(input: { clienteId: string; fyMeta: num
         `En UN solo paso llama a las cuatro herramientas a la vez: get_historia_sku_meta (fy_meta=${fyMeta}, periodo_meta=${periodoMeta}), ` +
         `get_boletines_vigentes (usa SOLO los de su bottler), get_notas_cliente y get_perfil_cliente. No hagas más llamadas después. ` +
         `Propón entre 3 y 6 SKU para ir a ofrecer este mes, cada uno con un volumen sugerido en EUs y un motivo corto y concreto. ` +
+        reglaMeta +
         `REGLAS PARA EL VOLUMEN: (1) Mira la historia completa del FY anterior de cada SKU (campo historia), no solo los últimos 3 meses: ` +
         `el poder de compra de un SKU es su total del FY anterior, su mayor mes y su promedio por compra. ` +
         `(2) Muchos clientes compran un SKU en ciclos (cada 2-4 meses): un mes en cero NO es abandono ni riesgo de stock; usa cadencia_meses y ` +
@@ -337,6 +351,7 @@ export async function resolverPropuesta(input: {
   const supabase = await requerirSesion();
   const feedback = (input.feedback ?? "").trim() || null;
   let total: number | null = null;
+  let sinDesglose: number | null = null;
 
   if (input.accion === "rechazar") {
     const { error } = await supabase
@@ -348,7 +363,9 @@ export async function resolverPropuesta(input: {
     const eus = Math.round(Number(input.eus ?? 0));
     if (!Number.isFinite(eus) || eus < 0) throw new Error("Volumen inválido");
     const { guardarMetaSku } = await import("@/app/(app)/actions");
-    total = await guardarMetaSku({ clienteId: input.clienteId, anioFiscal: input.fyMeta, periodo: input.periodoMeta, marca: input.marca, formato: input.formato, eus });
+    const r = await guardarMetaSku({ clienteId: input.clienteId, anioFiscal: input.fyMeta, periodo: input.periodoMeta, marca: input.marca, formato: input.formato, eus });
+    total = r.total;
+    sinDesglose = r.sinDesglose;
     const { error } = await supabase
       .from("recomendaciones")
       .update({ estado: "aceptada", eus_final: eus, feedback, resuelta_at: new Date().toISOString() })
@@ -357,7 +374,7 @@ export async function resolverPropuesta(input: {
   }
   revalidatePath("/copiloto");
   revalidatePath(`/clientes/${input.clienteId}`);
-  return { total };
+  return { total, sinDesglose };
 }
 
 export async function guardarFeedbackPropuesta(id: string, feedback: string) {

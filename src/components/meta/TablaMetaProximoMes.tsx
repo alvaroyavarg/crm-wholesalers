@@ -224,8 +224,17 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
 
   // Refleja en la tabla una meta por SKU ya guardada (desde el desglose o
   // desde el panel): nueva meta total + el ítem en el desglose si está cargado.
-  function aplicarMetaSku(clienteId: string, marca: string, formato: string, eus: number, total: number) {
+  function aplicarMetaSku(clienteId: string, marca: string, formato: string, eus: number, total: number, sinDesglose: number | null = null) {
     setEdiciones((p) => ({ ...p, [clienteId]: { eus: total > 0 ? String(Math.round(total)) : "", uc: total > 0 ? eusAUc(total) : "" } }));
+    if (sinDesglose != null) {
+      // asignar un SKU descontó de "Sin desglose": reflejarlo en el desglose abierto
+      setSkuEdits((p) => ({ ...p, [claveSku(clienteId, "Sin desglose", "")]: sinDesglose > 0 ? textoSku(sinDesglose) : "" }));
+      setDetalle((p) => {
+        const items = p[clienteId];
+        if (!Array.isArray(items)) return p;
+        return { ...p, [clienteId]: items.map((it) => (it.marca === "Sin desglose" ? { ...it, meta_eus: sinDesglose } : it)) };
+      });
+    }
     setSkuEdits((p) => ({ ...p, [claveSku(clienteId, marca, formato)]: eus > 0 ? textoSku(eus) : "" }));
     setDetalle((p) => {
       const items = p[clienteId];
@@ -260,8 +269,8 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
     if (!Number.isFinite(eus) || eus < 0) return;
     setGuardando((p) => ({ ...p, [k]: true }));
     try {
-      const total = await guardarMetaSku({ clienteId, anioFiscal: fyMeta, periodo: periodoMeta, marca, formato, eus });
-      aplicarMetaSku(clienteId, marca, formato, eus, total);
+      const r = await guardarMetaSku({ clienteId, anioFiscal: fyMeta, periodo: periodoMeta, marca, formato, eus });
+      aplicarMetaSku(clienteId, marca, formato, eus, r.total, r.sinDesglose);
     } finally {
       setGuardando((p) => ({ ...p, [k]: false }));
     }

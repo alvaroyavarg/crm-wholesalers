@@ -45,7 +45,7 @@ interface Props {
   catalogo: SkuCatalogo[];
   metaActual: number; // meta total viva (puede estar editándose en la tabla)
   onClose: () => void;
-  onMetaSku: (clienteId: string, marca: string, formato: string, eus: number, total: number) => void;
+  onMetaSku: (clienteId: string, marca: string, formato: string, eus: number, total: number, sinDesglose?: number | null) => void;
   onPedidos?: (clienteId: string, sumas: { comprometido: number; ingresado: number; facturado: number }) => void;
 }
 
@@ -234,6 +234,15 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
     [fila],
   );
   const sumaSku = detalle.reduce((s, it) => s + Number(it.meta_eus), 0);
+  const sinDesgloseActual = detalle.filter((it) => it.marca === "Sin desglose").reduce((s, it) => s + Number(it.meta_eus), 0);
+  // Asignar un SKU descuenta de "Sin desglose" (regla: la meta se reparte, no se suma)
+  function aplicarSinDesglose(sd: number | null) {
+    if (sd == null) return;
+    setDetalle((d) => d.map((x) => (x.marca === "Sin desglose" ? { ...x, meta_eus: sd } : x)));
+  }
+  const propuestasPendientes = propuestas.filter((p) => p.estado !== "aceptada" && p.estado !== "descartada");
+  const sumaPendientes = propuestasPendientes.reduce((s, p) => s + Number(p.eus), 0);
+  const excesoPropuesta = Math.round(sumaPendientes - sinDesgloseActual);
   const pedidosEnCurso = pedidos.filter((p) => p.estado !== "facturado").reduce((s, p) => s + Number(p.eus), 0);
   const cargadoRef = useRef(false);
   useEffect(() => {
@@ -301,7 +310,8 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
             ? d.map((it) => (it.marca === p.marca && it.formato === p.formato ? { ...it, meta_eus: v } : it))
             : [...d, { categoria: "", marca: p.marca, formato: p.formato, eus_a: 0, eus_b: 0, eus_c: 0, eus_d: 0, meta_eus: v }];
         });
-        onMetaSku(clienteId, p.marca, p.formato, v, r.total);
+        aplicarSinDesglose(r.sinDesglose);
+        onMetaSku(clienteId, p.marca, p.formato, v, r.total, r.sinDesglose);
       }
       setPropuestas((ps) => ps.map((x) => (claveProp(x) === k
         ? { ...x, estado: accion === "rechazar" ? "descartada" : "aceptada", eus_final: accion === "aceptar" ? Math.round(eus as number) : x.eus_final, feedback: feedback.trim() || x.feedback }
@@ -338,9 +348,10 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
     if (!Number.isFinite(eus) || eus < 0 || eus === Number(it.meta_eus)) return;
     setGuardandoSku((x) => ({ ...x, [k]: true }));
     try {
-      const total = await guardarMetaSku({ clienteId, anioFiscal: fyMeta, periodo: periodoMeta, marca: it.marca, formato: it.formato, eus });
+      const r = await guardarMetaSku({ clienteId, anioFiscal: fyMeta, periodo: periodoMeta, marca: it.marca, formato: it.formato, eus });
       setDetalle((d) => d.map((x) => (x.marca === it.marca && x.formato === it.formato ? { ...x, meta_eus: eus } : x)));
-      onMetaSku(clienteId, it.marca, it.formato, eus, total);
+      aplicarSinDesglose(r.sinDesglose);
+      onMetaSku(clienteId, it.marca, it.formato, eus, r.total, r.sinDesglose);
     } catch (e) {
       setErrorCarga(e instanceof Error ? e.message : "No se pudo guardar la meta del SKU");
     } finally {
@@ -648,7 +659,7 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
               </div>
             )}
             <p className="mt-3 text-[10px] text-gray-400">
-              La meta del cliente es la suma de la columna Meta (EUs por SKU); “Sin desglose” es lo que aún no está repartido. En pantalla chica se ocultan {etiquetas.a} y {etiquetas.b}; gira el teléfono para verlos.
+              La meta del cliente es la suma de la columna Meta (EUs por SKU); “Sin desglose” es lo que aún no está repartido: al asignar o subir un SKU se descuenta de ahí, y solo cuando llega a 0 la meta del cliente sube. En pantalla chica se ocultan {etiquetas.a} y {etiquetas.b}; gira el teléfono para verlos.
               {" "}Señales: <b>compraba LY</b> = tenía compra el mismo mes del año pasado y nada en los últimos 3 meses ·{" "}
               <b>cae vs LY</b> = promedio de los últimos 3 meses bajo dos tercios del LY · <b>nuevo</b> = compra este año sin LY.
             </p>
@@ -671,6 +682,14 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
             {propuestas.length > 0 && (
               <div className="mb-4">
                 {resumenPropuesta && <p className="mb-2 rounded-lg bg-verde-suave px-3 py-2 text-xs text-gray-700">{resumenPropuesta}</p>}
+                {propuestasPendientes.length > 0 && (
+                  <p className={`mb-2 rounded-lg px-3 py-2 text-xs ${excesoPropuesta > 0 ? "bg-ambar-suave text-ambar" : "bg-gray-50 text-gray-600"}`}>
+                    Meta del mes {formatEUs(sumaSku)} EU · sin asignar {formatEUs(sinDesgloseActual)} EU · propuestas pendientes {formatEUs(sumaPendientes)} EU.
+                    {excesoPropuesta > 0
+                      ? ` Aceptarlas todas sube la meta del cliente en ${formatEUs(excesoPropuesta)} EU: al asignar se descuenta primero de "Sin desglose" y el resto se suma a la meta.`
+                      : ' Caben dentro de "Sin desglose": aceptarlas no cambia la meta del cliente.'}
+                  </p>
+                )}
                 <ul className="space-y-2">
                   {propuestas.map((p) => {
                     const k = claveProp(p);
