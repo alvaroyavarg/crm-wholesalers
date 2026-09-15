@@ -73,6 +73,18 @@ export function formatPct(n: number | null, decimales = 1): string {
   return `${signo}${n.toFixed(decimales)}%`;
 }
 
+// Facturado del mes con la regla de la app: si el bottler ya cargó el mes,
+// venta real + pedidos facturados con fecha posterior al corte (no vienen en
+// el archivo); si no cargó, los pedidos marcados facturados.
+export function facturadoMes(f: {
+  venta_cargada: boolean;
+  venta_real: number;
+  ped_facturado: number;
+  ped_facturado_post_corte?: number;
+}): number {
+  return f.venta_cargada ? Number(f.venta_real) + Number(f.ped_facturado_post_corte ?? 0) : Number(f.ped_facturado);
+}
+
 export function formatFecha(iso: string | null): string {
   if (!iso) return "Sin visitas";
   return new Intl.DateTimeFormat("es-CL", {

@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { guardarMetaSku, obtenerDetalleMeta } from "@/app/(app)/actions";
 import { formatoUnidad, SwitchUnidad, usePublicarAvance, useUnidad } from "@/components/meta/MetaAvance";
+import { facturadoMes } from "@/lib/metrics";
 import { PanelCliente } from "@/components/meta/PanelCliente";
 import { Chip } from "@/components/ui/Chip";
 import { FACTOR_UC_EU } from "@/lib/importar/unidades";
@@ -69,7 +70,7 @@ const DESCUENTOS: { col: Descuento; etiqueta: string; corta: string }[] = [
 ];
 // Facturado efectivo: venta real si el bottler ya cargó el mes; si no, pedidos facturados.
 function facturadoDe(f: MetaClienteRow): number {
-  return f.venta_cargada ? Number(f.venta_real) : Number(f.ped_facturado);
+  return facturadoMes(f);
 }
 
 function etiquetaBottler(b: string | null): string {
@@ -573,7 +574,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                     {ver("ped_comprometido") && <td className="px-3 py-3 text-right text-gray-500">{Number(fp.ped_comprometido) > 0 ? fmt(fp.ped_comprometido) : "—"}</td>}
                     {ver("ped_ingresado") && <td className="px-3 py-3 text-right text-gray-500">{Number(fp.ped_ingresado) > 0 ? fmt(fp.ped_ingresado) : "—"}</td>}
                     {ver("facturado") && (
-                      <td className="px-3 py-3 text-right text-gray-700" title={fp.venta_cargada ? `Venta real cargada del bottler${Number(fp.ped_facturado) > 0 ? ` · pedidos facturados: ${fmt(fp.ped_facturado)}` : ""}` : "Pedidos marcados facturados (el bottler aún no carga este mes)"}>
+                      <td className="px-3 py-3 text-right text-gray-700" title={fp.venta_cargada ? `Venta real del bottler al ${fp.fecha_corte ?? "?"}${Number(fp.ped_facturado_post_corte) > 0 ? ` + ${fmt(fp.ped_facturado_post_corte)} facturados después del corte` : ""}${Number(fp.ped_facturado) > Number(fp.ped_facturado_post_corte) ? ` · pedidos facturados antes del corte no se suman (ya vienen en la venta)` : ""}` : "Pedidos marcados facturados (el bottler aún no carga este mes)"}>
                         {facturadoDe(fp) > 0 ? fmt(facturadoDe(fp)) : "—"}
                         {fp.venta_cargada && <span className="ml-1 text-[9px] text-verde" title="Venta real del bottler">●</span>}
                       </td>
@@ -642,7 +643,7 @@ export function TablaMetaProximoMes({ filas, fyMeta, periodoMeta, etiquetas, per
                               </td>}
                               {(() => {
                                 const pc = Number(it.ped_comprometido ?? 0), pi = Number(it.ped_ingresado ?? 0);
-                                const fac = f.venta_cargada ? Number(it.venta_real ?? 0) : Number(it.ped_facturado ?? 0);
+                                const fac = f.venta_cargada ? Number(it.venta_real ?? 0) + Number(it.ped_facturado_post_corte ?? 0) : Number(it.ped_facturado ?? 0);
                                 let br = nEus;
                                 if (descuentos.has("facturado")) br -= fac;
                                 if (descuentos.has("ped_ingresado")) br -= pi;

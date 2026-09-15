@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/server";
 import { etiquetaMesCalendario } from "@/lib/fiscal";
 import { FACTOR_UC_EU } from "@/lib/importar/unidades";
+import { facturadoMes } from "@/lib/metrics";
 import { detalleMetaTodos, metaProximoMes } from "@/lib/queries";
 
 // Exporta la tabla de Meta a un .xlsx con dos hojas: el resumen por cliente
@@ -50,9 +51,9 @@ export async function GET(request: Request) {
     "Meta EUS": Math.round(Number(c.meta_eus)),
     Comprometido: Math.round(Number(c.ped_comprometido)),
     Ingresado: Math.round(Number(c.ped_ingresado)),
-    Facturado: Math.round(c.venta_cargada ? Number(c.venta_real) : Number(c.ped_facturado)),
-    "Facturado según": c.venta_cargada ? "venta bottler" : "pedidos",
-    Brecha: Math.round(Number(c.meta_eus) - (c.venta_cargada ? Number(c.venta_real) : Number(c.ped_facturado))),
+    Facturado: Math.round(facturadoMes(c)),
+    "Facturado según": c.venta_cargada ? `venta bottler al ${c.fecha_corte ?? ""}` : "pedidos",
+    Brecha: Math.round(Number(c.meta_eus) - facturadoMes(c)),
     "Meta UC": Number(c.meta_eus) > 0
       ? Number((Number(c.meta_eus) / FACTOR_UC_EU).toFixed(1))
       : "",

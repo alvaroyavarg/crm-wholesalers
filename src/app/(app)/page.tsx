@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { TablaMes, type FilaMes } from "@/components/dashboard/TablaMes";
 import { etiquetaFY, etiquetaMesCalendario, etiquetaPeriodo, inicioPeriodo } from "@/lib/fiscal";
-import { formatEUs, formatFecha, ritmoMes } from "@/lib/metrics";
+import { facturadoMes, formatEUs, formatFecha, ritmoMes } from "@/lib/metrics";
 import { dashboardMes } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function Dashboard() {
   const { fy, periodo, clientes, cortes, ytd, compromisos, propuestasPendientes } = d;
   const etiquetaMes = etiquetaMesCalendario(fy, periodo);
 
-  const facturadoDe = (c: (typeof clientes)[number]) => (c.venta_cargada ? Number(c.venta_real) : Number(c.ped_facturado));
+  const facturadoDe = (c: (typeof clientes)[number]) => facturadoMes(c);
 
   // Totales de la cartera (incluye Otros: son parte de la meta del canal)
   const tot = clientes.reduce(

@@ -914,7 +914,7 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
               </p>
               {fila.venta_cargada && (
                 <p className="mb-2 rounded-lg bg-verde-suave px-3 py-2 text-[11px] text-gray-700">
-                  El bottler ya cargó este mes: venta real <b>{formatEUs(fila.venta_real)} EUs</b>. En la tabla, Facturado usa esa cifra; un pedido marcado facturado que no vino en la venta vale 0.
+                  El bottler ya cargó este mes hasta el <b>{fila.fecha_corte ?? "?"}</b>: venta real <b>{formatEUs(fila.venta_real)} EUs</b>. Facturado usa esa cifra. Un pedido facturado con fecha anterior al corte ya viene en la venta y no se suma de nuevo; uno posterior al corte sí se suma hasta que llegue el próximo archivo.
                 </p>
               )}
               <div className="grid grid-cols-2 gap-2">

@@ -368,35 +368,53 @@ export async function metaProximoMes(fyParam?: number, periodoParam?: number) {
   // bottlers ya cargaron ese mes. Regla: si el bottler del cliente ya cargó
   // el mes, la venta real es la única verdad y "facturado" = venta real.
   const [pedRes, mtdRes, cargasRes] = await Promise.all([
-    supabase.from("pedidos").select("cliente_id, estado, eus").eq("anio_fiscal", meta.fy).eq("periodo", meta.periodo),
+    supabase.from("pedidos").select("cliente_id, estado, eus, fecha, bottler").eq("anio_fiscal", meta.fy).eq("periodo", meta.periodo),
     supabase.rpc("mtd_cartera", { p_fy: meta.fy, p_periodo: meta.periodo }),
-    supabase.from("importaciones").select("origen").eq("anio_fiscal", meta.fy).eq("periodo", meta.periodo).in("origen", ["KOA", "KOE"]),
+    supabase.from("importaciones").select("origen, fecha_corte").eq("anio_fiscal", meta.fy).eq("periodo", meta.periodo).in("origen", ["KOA", "KOE"]),
   ]);
-  const ped = new Map<string, { comprometido: number; ingresado: number; facturado: number }>();
-  for (const p of pedRes.error ? [] : (pedRes.data ?? [])) {
-    const acc = ped.get(p.cliente_id as string) ?? { comprometido: 0, ingresado: 0, facturado: 0 };
-    const est = p.estado as "comprometido" | "ingresado" | "facturado";
-    acc[est] = (acc[est] ?? 0) + Number(p.eus);
-    ped.set(p.cliente_id as string, acc);
+  // Fecha de corte por bottler (la última carga de cada uno)
+  const corteDe = new Map<string, string>();
+  for (const c of cargasRes.error ? [] : (cargasRes.data ?? [])) {
+    const prev = corteDe.get(c.origen as string);
+    if (!prev || (c.fecha_corte as string) > prev) corteDe.set(c.origen as string, c.fecha_corte as string);
   }
   const real = new Map<string, { total: number; koa: number; koe: number }>();
   for (const r of mtdRes.error ? [] : ((mtdRes.data ?? []) as MtdClienteRow[])) {
     real.set(r.cliente_id, { total: Number(r.mtd_eus), koa: Number(r.mtd_koa), koe: Number(r.mtd_koe) });
   }
-  const cargados = new Set((cargasRes.error ? [] : (cargasRes.data ?? [])).map((c) => c.origen as string));
+  const bottlerDe = new Map(((data ?? []) as MetaClienteRow[]).map((c) => [c.cliente_id, c.bottler]));
+  // Pedidos por estado; los facturados después del corte del bottler no
+  // vienen en la venta real, así que se guardan aparte para sumarlos.
+  const ped = new Map<string, { comprometido: number; ingresado: number; facturado: number; facturadoPost: number }>();
+  for (const p of pedRes.error ? [] : (pedRes.data ?? [])) {
+    const cid = p.cliente_id as string;
+    const acc = ped.get(cid) ?? { comprometido: 0, ingresado: 0, facturado: 0, facturadoPost: 0 };
+    const est = p.estado as "comprometido" | "ingresado" | "facturado";
+    acc[est] = (acc[est] ?? 0) + Number(p.eus);
+    if (est === "facturado") {
+      const corte = corteDe.get((p.bottler as string | null) ?? bottlerDe.get(cid) ?? "");
+      if (corte && (p.fecha as string) > corte) acc.facturadoPost += Number(p.eus);
+    }
+    ped.set(cid, acc);
+  }
 
   const clientes = ((data ?? []) as MetaClienteRow[]).map((c) => {
-    const p = ped.get(c.cliente_id) ?? { comprometido: 0, ingresado: 0, facturado: 0 };
+    const p = ped.get(c.cliente_id) ?? { comprometido: 0, ingresado: 0, facturado: 0, facturadoPost: 0 };
     const v = real.get(c.cliente_id) ?? { total: 0, koa: 0, koe: 0 };
     // Frontera: basta con que uno de sus bottlers haya cargado para que la venta real mande.
-    const cargada = c.bottler ? cargados.has(c.bottler) || (c.es_frontera && (cargados.has("KOA") || cargados.has("KOE"))) : cargados.size > 0;
+    const cortesCli = c.bottler && corteDe.has(c.bottler)
+      ? [corteDe.get(c.bottler) as string]
+      : c.es_frontera || !c.bottler ? [...corteDe.values()] : [];
+    const cargada = cortesCli.length > 0;
     return {
       ...c,
       ped_comprometido: p.comprometido,
       ped_ingresado: p.ingresado,
       ped_facturado: p.facturado,
+      ped_facturado_post_corte: cargada ? p.facturadoPost : 0,
       venta_real: v.total,
       venta_cargada: cargada,
+      fecha_corte: cargada ? cortesCli.sort()[0] : null,
     };
   });
 

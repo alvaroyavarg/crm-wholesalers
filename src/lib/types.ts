@@ -290,6 +290,8 @@ export interface MetaClienteRow {
   ped_facturado: number; // pedidos marcados facturados (EUs)
   venta_real: number; // venta cargada del bottler para el mes objetivo (EUs)
   venta_cargada: boolean; // true si el bottler del cliente ya cargó ese mes → venta_real manda
+  fecha_corte: string | null; // hasta qué día llega la venta real del bottler del cliente
+  ped_facturado_post_corte: number; // pedidos facturados con fecha posterior al corte: se suman a la venta real
 }
 
 // Item del RPC detalle_meta_cliente (drill-down por SKU, un cliente)
@@ -306,6 +308,7 @@ export interface DetalleMetaItem {
   ped_comprometido?: number;
   ped_ingresado?: number;
   ped_facturado?: number;
+  ped_facturado_post_corte?: number; // facturados después del corte del bottler (no vienen en la venta real)
   venta_real?: number; // venta cargada del bottler para ese SKU en el mes objetivo
 }
 

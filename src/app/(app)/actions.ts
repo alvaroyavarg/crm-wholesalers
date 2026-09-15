@@ -392,15 +392,23 @@ export async function obtenerDetalleMeta(
   const d0 = inicioPeriodo(fyMeta, periodoMeta);
   const d1 = new Date(d0.getFullYear(), d0.getMonth() + 1, 1);
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-  const [pedRes, venRes] = await Promise.all([
-    supabase.from("pedidos").select("marca, formato, estado, eus").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
+  const [pedRes, venRes, cliRes, cargasRes] = await Promise.all([
+    supabase.from("pedidos").select("marca, formato, estado, eus, fecha, bottler").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
     supabase.from("ventas").select("marca, formato, eus").eq("cliente_id", clienteId).gte("periodo", iso(d0)).lt("periodo", iso(d1)),
+    supabase.from("clientes").select("bottler").eq("id", clienteId).maybeSingle(),
+    supabase.from("importaciones").select("origen, fecha_corte").eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta).in("origen", ["KOA", "KOE"]),
   ]);
+  const corteDe = new Map<string, string>();
+  for (const c of cargasRes.error ? [] : (cargasRes.data ?? [])) {
+    const prev = corteDe.get(c.origen as string);
+    if (!prev || (c.fecha_corte as string) > prev) corteDe.set(c.origen as string, c.fecha_corte as string);
+  }
+  const bottlerCli = (cliRes.data?.bottler as string | null) ?? null;
   const clave = (m: string, f: string | null) => `${m}|${f ?? ""}`;
-  const porSku = new Map<string, { ped_comprometido: number; ped_ingresado: number; ped_facturado: number; venta_real: number }>();
+  const porSku = new Map<string, { ped_comprometido: number; ped_ingresado: number; ped_facturado: number; ped_facturado_post_corte: number; venta_real: number }>();
   const get = (k: string) => {
     let v = porSku.get(k);
-    if (!v) { v = { ped_comprometido: 0, ped_ingresado: 0, ped_facturado: 0, venta_real: 0 }; porSku.set(k, v); }
+    if (!v) { v = { ped_comprometido: 0, ped_ingresado: 0, ped_facturado: 0, ped_facturado_post_corte: 0, venta_real: 0 }; porSku.set(k, v); }
     return v;
   };
   for (const p of pedRes.error ? [] : (pedRes.data ?? [])) {
@@ -408,7 +416,11 @@ export async function obtenerDetalleMeta(
     const est = p.estado as "comprometido" | "ingresado" | "facturado";
     if (est === "comprometido") v.ped_comprometido += Number(p.eus);
     else if (est === "ingresado") v.ped_ingresado += Number(p.eus);
-    else v.ped_facturado += Number(p.eus);
+    else {
+      v.ped_facturado += Number(p.eus);
+      const corte = corteDe.get((p.bottler as string | null) ?? bottlerCli ?? "");
+      if (corte && (p.fecha as string) > corte) v.ped_facturado_post_corte += Number(p.eus);
+    }
   }
   for (const r of venRes.error ? [] : (venRes.data ?? [])) {
     get(clave(r.marca as string, r.formato as string | null)).venta_real += Number(r.eus);
