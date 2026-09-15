@@ -1,5 +1,7 @@
 "use server";
 
+import { pedidoFueraDeCarga, type CorteCarga } from "@/lib/metrics";
+
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { inicioPeriodo } from "@/lib/fiscal";
@@ -393,15 +395,15 @@ export async function obtenerDetalleMeta(
   const d1 = new Date(d0.getFullYear(), d0.getMonth() + 1, 1);
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
   const [pedRes, venRes, cliRes, cargasRes] = await Promise.all([
-    supabase.from("pedidos").select("marca, formato, estado, eus, fecha, bottler").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
+    supabase.from("pedidos").select("marca, formato, estado, eus, fecha, bottler, creado_at").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
     supabase.from("ventas").select("marca, formato, eus").eq("cliente_id", clienteId).gte("periodo", iso(d0)).lt("periodo", iso(d1)),
     supabase.from("clientes").select("bottler").eq("id", clienteId).maybeSingle(),
-    supabase.from("importaciones").select("origen, fecha_corte").eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta).in("origen", ["KOA", "KOE"]),
+    supabase.from("importaciones").select("origen, fecha_corte, creado_at").eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta).in("origen", ["KOA", "KOE"]),
   ]);
-  const corteDe = new Map<string, string>();
+  const corteDe = new Map<string, CorteCarga>();
   for (const c of cargasRes.error ? [] : (cargasRes.data ?? [])) {
     const prev = corteDe.get(c.origen as string);
-    if (!prev || (c.fecha_corte as string) > prev) corteDe.set(c.origen as string, c.fecha_corte as string);
+    if (!prev || (c.creado_at as string) > prev.carga) corteDe.set(c.origen as string, { fecha: c.fecha_corte as string, carga: c.creado_at as string });
   }
   const bottlerCli = (cliRes.data?.bottler as string | null) ?? null;
   const clave = (m: string, f: string | null) => `${m}|${f ?? ""}`;
@@ -419,7 +421,7 @@ export async function obtenerDetalleMeta(
     else {
       v.ped_facturado += Number(p.eus);
       const corte = corteDe.get((p.bottler as string | null) ?? bottlerCli ?? "");
-      if (corte && (p.fecha as string) > corte) v.ped_facturado_post_corte += Number(p.eus);
+      if (corte && pedidoFueraDeCarga(p as { fecha: string; creado_at: string }, corte)) v.ped_facturado_post_corte += Number(p.eus);
     }
   }
   for (const r of venRes.error ? [] : (venRes.data ?? [])) {

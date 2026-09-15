@@ -76,6 +76,20 @@ export function formatPct(n: number | null, decimales = 1): string {
 // Facturado del mes con la regla de la app: si el bottler ya cargó el mes,
 // venta real + pedidos facturados con fecha posterior al corte (no vienen en
 // el archivo); si no cargó, los pedidos marcados facturados.
+// Corte de una carga de bottler: hasta qué día llega el archivo y cuándo se cargó.
+export interface CorteCarga {
+  fecha: string; // YYYY-MM-DD
+  carga: string; // ISO timestamp de la importación
+}
+
+// Un pedido facturado se suma a la venta real solo si NO puede venir en el
+// archivo: fecha posterior al corte Y anotado después de cargar el archivo.
+// Lo anotado antes de la carga se asume incluido (el archivo es la verdad a
+// la fecha), aunque su fecha sea posterior al corte.
+export function pedidoFueraDeCarga(p: { fecha: string; creado_at: string }, corte: CorteCarga): boolean {
+  return p.fecha > corte.fecha && p.creado_at > corte.carga;
+}
+
 export function facturadoMes(f: {
   venta_cargada: boolean;
   venta_real: number;

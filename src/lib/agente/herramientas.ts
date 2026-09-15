@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Anthropic from "@anthropic-ai/sdk";
+import { pedidoFueraDeCarga, type CorteCarga } from "@/lib/metrics";
 import { aFiscal, etiquetaMesCalendario, fiscalActual, inicioPeriodo, mesDePeriodo, sumarPeriodos } from "@/lib/fiscal";
 import type { ItemDetalle, MixCategoriaRow, MixSkuRow, SeriePeriodoRow } from "@/lib/types";
 
@@ -344,9 +345,9 @@ export async function getHistoriaSkuMeta(
       p_fy_meta: fyMeta, p_periodo_meta: periodoMeta,
     }),
     supabase.from("plan_ventas").select("eus_plan").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta).maybeSingle(),
-    supabase.from("pedidos").select("fecha, marca, formato, eus, estado, precio_botella, comentario").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
+    supabase.from("pedidos").select("fecha, marca, formato, eus, estado, precio_botella, comentario, creado_at").eq("cliente_id", clienteId).eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
     supabase.from("ventas").select("periodo, marca, formato, eus").eq("cliente_id", clienteId).gte("periodo", desdeISO),
-    supabase.from("importaciones").select("origen, fecha_corte").eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta),
+    supabase.from("importaciones").select("origen, fecha_corte, creado_at").eq("anio_fiscal", fyMeta).eq("periodo", periodoMeta).in("origen", ["KOA", "KOE"]),
   ]);
   if (detRes.error) return { error: detRes.error.message };
 
@@ -375,9 +376,11 @@ export async function getHistoriaSkuMeta(
   // Regla de la app: si el bottler del cliente ya cargó el mes objetivo, la
   // venta real es la única verdad (facturado = venta real); si no, cuentan
   // los pedidos marcados facturados.
-  const cargas = cargasRes.error ? [] : ((cargasRes.data ?? []) as { origen: string; fecha_corte: string }[]);
+  const cargas = cargasRes.error ? [] : ((cargasRes.data ?? []) as { origen: string; fecha_corte: string; creado_at: string }[]);
   const bottlerCli = cliRes.data?.bottler ?? null;
-  const cargaBottler = cargas.filter((c) => !bottlerCli || c.origen === bottlerCli).map((c) => c.fecha_corte).sort().at(-1) ?? null;
+  const cargaFila = cargas.filter((c) => !bottlerCli || c.origen === bottlerCli).sort((a, b) => a.creado_at.localeCompare(b.creado_at)).at(-1) ?? null;
+  const cargaBottler = cargaFila?.fecha_corte ?? null;
+  const corteCarga: CorteCarga | null = cargaFila ? { fecha: cargaFila.fecha_corte, carga: cargaFila.creado_at } : null;
   const ventaCargada = cargaBottler != null;
   const ventaRealTotal = [...ventaRealSku.values()].reduce((a, b) => a + b, 0);
   const idxMeta = fyMeta * 12 + periodoMeta;
@@ -411,7 +414,7 @@ export async function getHistoriaSkuMeta(
     };
   }
 
-  const pedidos = (pedRes.data ?? []) as { fecha: string; marca: string; formato: string; eus: number; estado: string; precio_botella: number | null; comentario: string | null }[];
+  const pedidos = (pedRes.data ?? []) as { fecha: string; marca: string; formato: string; eus: number; estado: string; precio_botella: number | null; comentario: string | null; creado_at: string }[];
   interface Item { categoria: string; marca: string; formato: string; eus_a: number; eus_b: number; eus_c: number; eus_d: number; meta_eus: number }
   const items = ((detRes.data ?? []) as Item[]).map((it) => {
     const ea = Number(it.eus_a), eb = Number(it.eus_b), ec = Number(it.eus_c), ed = Number(it.eus_d);
@@ -452,9 +455,9 @@ export async function getHistoriaSkuMeta(
 
   const metaSku = items.reduce((s, it) => s + Number(it.meta_sku_eus), 0);
   const pedTot = (estado: string) => r0(pedidos.filter((p) => p.estado === estado).reduce((s, p) => s + Number(p.eus), 0));
-  // Pedidos facturados con fecha posterior al corte del bottler no vienen en la venta real: se suman.
-  const facturadosPostCorte = ventaCargada
-    ? pedidos.filter((p) => p.estado === "facturado" && cargaBottler != null && p.fecha > cargaBottler).reduce((s, p) => s + Number(p.eus), 0)
+  // Pedidos facturados que no vienen en la venta real (posteriores al corte y anotados después de la carga): se suman.
+  const facturadosPostCorte = ventaCargada && corteCarga
+    ? pedidos.filter((p) => p.estado === "facturado" && pedidoFueraDeCarga(p, corteCarga)).reduce((s, p) => s + Number(p.eus), 0)
     : 0;
   const facturadoEfectivo = ventaCargada ? ventaRealTotal + facturadosPostCorte : pedidos.filter((p) => p.estado === "facturado").reduce((s, p) => s + Number(p.eus), 0);
 
@@ -479,7 +482,7 @@ export async function getHistoriaSkuMeta(
       facturado_eus: r0(facturadoEfectivo),
       brecha_eus: r0(Number(planRes.data?.eus_plan ?? 0) - facturadoEfectivo),
       regla: ventaCargada
-        ? `El bottler ya cargó el mes hasta el ${cargaBottler}: la venta real es la única verdad; un pedido facturado con fecha anterior al corte ya viene en la venta (no se suma); uno posterior al corte sí se suma.`
+        ? `El bottler ya cargó el mes hasta el ${cargaBottler}: la venta real es la única verdad. Un pedido facturado anotado antes de esa carga, o con fecha anterior al corte, ya viene en la venta real (no se suma); solo se suma uno anotado después de la carga y con fecha posterior al corte.`
         : "El bottler aún no carga el mes: facturado = pedidos marcados facturados; el avance es provisorio.",
     },
     total_3m_promedio: r0(items.reduce((s, it) => s + Number(it.promedio_3m), 0)),

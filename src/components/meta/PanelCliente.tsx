@@ -15,7 +15,7 @@ import {
 } from "@/app/(app)/meta/panel-actions";
 import { Chip } from "@/components/ui/Chip";
 import { FACTOR_UC_EU } from "@/lib/importar/unidades";
-import { formatEUs } from "@/lib/metrics";
+import { formatEUs, pedidoFueraDeCarga } from "@/lib/metrics";
 import type {
   DetalleMetaItem,
   EstadoPedido,
@@ -933,7 +933,7 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
               </p>
               {fila.venta_cargada && (
                 <p className="mb-2 rounded-lg bg-verde-suave px-3 py-2 text-[11px] text-gray-700">
-                  El bottler ya cargó este mes hasta el <b>{fila.fecha_corte ?? "?"}</b>: venta real <b>{formatEUs(fila.venta_real)} EUs</b>. Facturado usa esa cifra. Un pedido facturado con fecha anterior al corte ya viene en la venta y no se suma de nuevo; uno posterior al corte sí se suma hasta que llegue el próximo archivo.
+                  El bottler ya cargó este mes hasta el <b>{fila.fecha_corte ?? "?"}</b>: venta real <b>{formatEUs(fila.venta_real)} EUs</b>. Facturado usa esa cifra. Los pedidos facturados que anotaste antes de esa carga ya vienen en el archivo y no se suman de nuevo. Solo se suma lo que anotes después de la carga con fecha posterior al corte, hasta que llegue el próximo archivo.
                 </p>
               )}
               <div className="grid grid-cols-2 gap-2">
@@ -1005,6 +1005,8 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
               <ul className="space-y-1.5">
                 {pedidos.map((p) => {
                   const est = ESTADOS.find((s) => s.valor === p.estado) ?? ESTADOS[1];
+                  const enVentaReal = p.estado === "facturado" && fila.venta_cargada
+                    && !(fila.fecha_corte != null && fila.fecha_carga != null && pedidoFueraDeCarga(p, { fecha: fila.fecha_corte, carga: fila.fecha_carga }));
                   return (
                     <li key={p.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2">
                       <div className="min-w-0 flex-1">
@@ -1018,6 +1020,11 @@ export function PanelCliente({ fila, fyMeta, periodoMeta, etiquetas, periodos, c
                           {fechaCorta(p.fecha)}
                           {p.precio_botella != null ? ` · $${Math.round(Number(p.precio_botella)).toLocaleString("es-CL")}/bot.` : ""}
                           {p.comentario ? ` · ${p.comentario}` : ""}
+                          {p.estado === "facturado" && fila.venta_cargada && (
+                            <span className={`ml-1 ${enVentaReal ? "text-gray-400" : "text-verde"}`}>
+                              {enVentaReal ? "· ya en venta real, no se suma" : "· posterior a la carga, se suma"}
+                            </span>
+                          )}
                         </p>
                       </div>
                       <select
